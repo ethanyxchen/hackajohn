@@ -259,3 +259,77 @@ a {
   margin-top: 12px;
   line-height: 1.5;
 }
+
+/* ---- Upload Section ---- */
+
+.upload-section {
+  padding: 0 24px;
+  margin-bottom: 4px;
+}
+
+.upload-section .panel {
+  max-width: 600px;
+}
+
+.upload-zone {
+  border: 2px dashed var(--panel-border);
+  border-radius: 14px;
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  color: var(--muted);
+}
+
+.upload-zone:hover,
+.upload-zone.dragover {
+  border-color: var(--accent-2);
+  background: rgba(108, 212, 197, 0.06);
+}
+
+.upload-input {
+  display: none;
+}
+
+.upload-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.upload-preview img {
+  max-width: 100%;
+  max-height: 180px;
+  border-radius: 10px;
+  object-fit: contain;
+}
+
+.upload-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.upload-error {
+  margin-top: 10px;
+  color: var(--accent-3);
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: var(--ink);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { gridToScreen, screenToGrid } from '@isocity/components/game/utils';
 import { TILE_HEIGHT, TILE_WIDTH } from '@isocity/components/game/types';
+import type { FloorPlanData, Room, RoomType } from '@/types/floorplan';
 
 type Tool = 'floor' | 'erase' | 'furniture';
 
@@ -316,6 +317,14 @@ export default function RoomPlanner() {
   const [rotation, setRotation] = useState<0 | 90>(0);
   const [status, setStatus] = useState<string>('Drag furniture in the isometric view to move it.');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [rooms, setRooms] = useState<Room[]>([]);
+
+  // Upload state
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const spriteImages = useSpriteImages(SPRITE_MAP);
 
@@ -331,6 +340,69 @@ export default function RoomPlanner() {
     }
     return map;
   }, [items]);
+
+  // --- Upload handlers ---
+  const onFloorPlanParsed = useCallback((data: FloorPlanData) => {
+    setGrid(data.grid);
+    setRooms(data.rooms);
+    setItems([]);
+    setSelectedItemId(null);
+    setStatus('Floor plan loaded! Drop furniture or use auto-furnish.');
+  }, []);
+
+  const readFileAsDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+
+  const handleFiles = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Please upload an image file.');
+      return;
+    }
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setUploadPreview(dataUrl);
+      setUploadError(null);
+    } catch {
+      setUploadError('Failed to read image file.');
+    }
+  }, []);
+
+  const handleAnalyze = useCallback(async () => {
+    if (!uploadPreview) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const res = await fetch('/api/parse-floorplan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: uploadPreview }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setUploadError(data.error || 'Analysis failed.');
+        return;
+      }
+      onFloorPlanParsed(data as FloorPlanData);
+    } catch {
+      setUploadError('Network error. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  }, [uploadPreview, onFloorPlanParsed]);
+
+  const handleTryAgain = useCallback(() => {
+    setUploadError(null);
+    if (uploadPreview) {
+      handleAnalyze();
+    }
+  }, [uploadPreview, handleAnalyze]);
 
   const handleCellClick = useCallback((x: number, y: number) => {
     if (tool === 'floor' || tool === 'erase') {
@@ -383,6 +455,63 @@ export default function RoomPlanner() {
         <h1>Iso Room Planner</h1>
         <p>Sketch a floor plan, then watch it snap into a cozy isometric room. Drop furniture on the plan or drag it around in the 3D view.</p>
       </header>
+
+      <section className="upload-section">
+        <div className="panel">
+          <h2>Upload Floor Plan</h2>
+          <div
+            className={`upload-zone ${dragOver ? 'dragover' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="upload-input"
+              onChange={(e) => handleFiles(e.target.files)}
+            />
+            {uploadPreview ? (
+              <div className="upload-preview">
+                <img src={uploadPreview} alt="Floor plan preview" />
+                <div className="upload-actions">
+                  <button
+                    type="button"
+                    className="action-button primary"
+                    onClick={(e) => { e.stopPropagation(); handleAnalyze(); }}
+                    disabled={uploading}
+                  >
+                    {uploading ? (
+                      <>
+                        <span className="spinner" /> Analyzing…
+                      </>
+                    ) : (
+                      'Analyze Floor Plan'
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    className="tool-button"
+                    onClick={(e) => { e.stopPropagation(); setUploadPreview(null); setUploadError(null); }}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p>Drop a floor plan image here or click to browse</p>
+            )}
+          </div>
+          {uploadError && (
+            <div className="upload-error">
+              <span>{uploadError}</span>
+              <button type="button" className="tool-button" onClick={handleTryAgain}>Try Again</button>
+            </div>
+          )}
+        </div>
+      </section>
 
       <section className="main">
         <div className="panel">
