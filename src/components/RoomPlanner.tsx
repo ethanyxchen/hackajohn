@@ -1315,6 +1315,9 @@ function IsoRoomCanvas({
   }, [drawScene]);
 
   const handlePointerDown = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (event.currentTarget.setPointerCapture) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -1330,6 +1333,15 @@ function IsoRoomCanvas({
     const { gridX, gridY } = screenToGrid(localX, localY, offsetRef.current.x, offsetRef.current.y);
     const original = toOriginal(gridX, gridY, gridWidth, gridHeight, viewRotation);
 
+    const isPanGesture = event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey;
+
+    if (isPanGesture) {
+      onSelectItem(null);
+      setIsPanning(true);
+      panStartRef.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
+      return;
+    }
+
     const item = findItemAt(items, original.x, original.y);
     if (item) {
       dragRef.current = { id: item.id, offsetX: original.x - item.x, offsetY: original.y - item.y };
@@ -1337,16 +1349,8 @@ function IsoRoomCanvas({
       return;
     }
 
-    if (event.button === 0 && !event.shiftKey) {
-      onPlaceItem(original.x, original.y);
-      return;
-    }
-
     onSelectItem(null);
-    if (event.button === 1 || event.button === 2 || event.shiftKey) {
-      setIsPanning(true);
-      panStartRef.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
-    }
+    onPlaceItem(original.x, original.y);
   }, [baseCols, baseRows, gridHeight, gridWidth, items, onPlaceItem, onSelectItem, pan.x, pan.y, viewRotation, zoom]);
 
   const handlePointerMove = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -1382,7 +1386,10 @@ function IsoRoomCanvas({
     }
   }, [baseCols, baseRows, grid, gridHeight, gridWidth, isPanning, items, onMoveItem, pan.x, pan.y, viewRotation, zoom]);
 
-  const handlePointerUp = useCallback(() => {
+  const handlePointerUp = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
     dragRef.current = null;
     setIsPanning(false);
     panStartRef.current = null;
