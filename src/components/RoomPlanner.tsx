@@ -1396,7 +1396,7 @@ function IsoRoomCanvas({
     panStartRef.current = null;
   }, []);
 
-  const handleWheel = useCallback((event: React.WheelEvent<HTMLCanvasElement>) => {
+  const handleWheel = useCallback((event: WheelEvent) => {
     event.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -1419,6 +1419,14 @@ function IsoRoomCanvas({
     setZoom(nextZoom);
     setPan({ x: nextPanX, y: nextPanY });
   }, [baseCols, baseRows, gridHeight, gridWidth, pan.x, pan.y, viewRotation, zoom]);
+
+  // Attach wheel listener as non-passive so preventDefault() actually works
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', handleWheel);
+  }, [handleWheel]);
 
   useEffect(() => {
     if (gridWidth === 0 || gridHeight === 0) return;
@@ -1458,7 +1466,6 @@ function IsoRoomCanvas({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
-        onWheel={handleWheel}
       />
     </div>
   );
