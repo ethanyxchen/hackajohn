@@ -12,9 +12,9 @@ A first-pass prototype that turns a floor plan into an isometric room and lets y
 
 ---
 
-## Sprint Plan (2.5 hours)
+## Sprint Plan -- 3 Parallel Workstreams (2.5 hours)
 
-Transform the manual grid editor into a wow-worthy demo by adding AI-powered floor plan image upload, sprite-based isometric rendering, and auto-furnishing -- the three features that will make the demo go from "nice prototype" to "this is magic".
+Transform the manual grid editor into a wow-worthy demo by adding AI-powered floor plan image upload, sprite-based isometric rendering, and auto-furnishing. Team of 3, divide and conquer.
 
 ### Current State
 
@@ -25,74 +25,27 @@ Working isometric room planner at `src/components/RoomPlanner.tsx` with:
 - Drag-and-drop furniture (sofa, bed, table, chair, plant) with collision detection
 - Uses `gridToScreen`/`screenToGrid` from the isometric-city package for coordinate math
 
-**The gap:** The core pitch is "read a 2D floor plan" but there is no image upload or floor plan parsing. Furniture renders as flat colored boxes, not SimCity-style sprites. The isometric-city package has a full sprite system and 10+ sprite sheets sitting unused.
+**The gap:** No image upload or floor plan parsing. Furniture renders as flat colored boxes. The isometric-city package has sprites sitting unused, and we need new pixel-art furniture assets.
 
 ---
 
-### 1. Floor Plan Image Upload + AI Room Detection (~50 min)
+### Shared JSON Schema (agree FIRST, ~5 min, all 3)
 
-**Why:** This IS the product. Without it, you're demo-ing a manual grid editor.
+Everyone works against this contract in `src/types/floorplan.ts`:
 
-**What to build:**
+```typescript
+type FloorPlanData = {
+  grid: boolean[][];  // e.g. 16x12, true = floor, false = wall/outside
+  rooms: Room[];
+};
 
-- Add an image upload zone (drag-and-drop or file picker) above the 2D grid in the left panel
-- Create an API route at `src/app/api/parse-floorplan/route.ts` that:
-  - Accepts the uploaded image (base64)
-  - Sends it to OpenAI GPT-4o Vision (or similar multimodal LLM) with a structured prompt
-  - Prompt asks the model to return a JSON grid (boolean[][] for walls/floors) + detected rooms with types (bedroom, kitchen, bathroom, living room, etc.) and bounding boxes
-- On response, populate the `grid` state and overlay room labels on the 2D view
-- Show a loading spinner during processing
-
-**Key prompt design:** Ask the model to output a fixed-size grid (e.g. 16x12) where `true` = floor, `false` = wall/outside, plus an array of `{ type, x, y, w, h }` for detected rooms.
-
-### 2. Auto-Furnish Rooms by Type (~30 min)
-
-**Why:** Instant wow -- upload a floor plan and furniture appears in the right places.
-
-**What to build:**
-
-- Define furniture presets per room type:
-  - Bedroom: bed + plant
-  - Living room: sofa + table + plant
-  - Kitchen: table + chair
-  - Bathroom: (skip or minimal)
-- After AI returns room bounding boxes, auto-place appropriate furniture within each room's bounds using `canPlaceItem()` for collision avoidance
-- Add "Auto-Furnish" button that re-runs this logic
-
-### 3. Sprite-Based Isometric Rendering (~40 min)
-
-**Why:** Transforms colored boxes into a SimCity-like scene. Massive visual upgrade.
-
-**What to build:**
-
-- Load sprite sheets from `packages/isometric-city/public/assets/` (they have buildings, parks, furniture-like objects)
-- Replace the `drawDiamond` floor rendering with textured isometric tiles using sprites
-- Replace colored-box furniture with sprite images:
-  - Map furniture types to appropriate sprites from the sprite sheets
-  - Use the sprite pack config at `packages/isometric-city/src/lib/renderConfig.ts` for sprite coordinates and offsets
-- Add image preloading with the existing `imageLoader.ts` pattern
-
-### 4. UI Polish + Export (~25 min)
-
-**Why:** Demo polish wins hackathons.
-
-**What to build:**
-
-- "Download as PNG" button that exports the isometric canvas via `canvas.toDataURL()`
-- Room type labels rendered on the isometric view (floating text above each room)
-- Subtle entrance animation when floor plan loads (tiles fade/slide in row by row)
-- Better status messages with room count, furniture count summary
-- Slightly larger default grid (16x12) to support realistic floor plans
-
-### 5. Demo-Ready Preset Floor Plans (~15 min)
-
-**Why:** If the AI API is slow or flaky during demo, you need a fallback.
-
-**What to build:**
-
-- 2-3 hardcoded example floor plans (studio apartment, 2-bedroom, office) as JSON
-- "Load Example" dropdown that instantly populates the grid + furniture
-- These also serve as a great "before/after" comparison in the demo
+type Room = {
+  type: 'bedroom' | 'living_room' | 'kitchen' | 'bathroom' | 'hallway' | 'office';
+  label: string;       // "Master Bedroom", "Kitchen", etc.
+  x: number; y: number; // top-left grid coord of bounding box
+  w: number; h: number; // width/height in grid cells
+};
+```
 
 ---
 
@@ -100,26 +53,129 @@ Working isometric room planner at `src/components/RoomPlanner.tsx` with:
 
 ```mermaid
 flowchart LR
-  Upload["Image Upload"] --> API["API Route /api/parse-floorplan"]
-  API --> LLM["GPT-4o Vision"]
-  LLM --> JSON["Grid + Room Types"]
-  JSON --> Grid["Grid State"]
-  JSON --> AutoFurnish["Auto-Furnish Logic"]
-  AutoFurnish --> Items["Furniture Items"]
-  Grid --> IsoCanvas["Isometric Canvas"]
-  Items --> IsoCanvas
-  IsoCanvas --> Sprites["Sprite Sheet Rendering"]
-  IsoCanvas --> Export["PNG Export"]
+  subgraph PersonA [Person A: AI Pipeline]
+    Upload["Image Upload UI"] --> APIRoute["API Route"]
+    APIRoute --> LLM["LLM Vision API"]
+    LLM --> JSONout["FloorPlanData JSON"]
+  end
+  subgraph PersonB [Person B: Iso Renderer]
+    JSONin["FloorPlanData JSON"] --> GridState["Grid + Room State"]
+    GridState --> Canvas["Isometric Canvas"]
+    Canvas --> Sprites["Sprite Rendering"]
+    Canvas --> Export["PNG Export"]
+  end
+  subgraph PersonC [Person C: Assets + Logic]
+    FindAssets["Source Furniture Sprites"] --> SpriteSheet["Sprite Sheet"]
+    SpriteSheet --> FurnitureDraw["Furniture Drawing Fns"]
+    AutoFurnish["Auto-Furnish by Room Type"] --> Items["Furniture Items"]
+    Presets["Preset Floor Plans"] --> JSONin
+  end
+  JSONout --> JSONin
+  Items --> Canvas
+  FurnitureDraw --> Canvas
 ```
+
+---
+
+### Person A: AI Pipeline (backend-focused)
+
+**Files:** `src/app/api/parse-floorplan/route.ts` (new), upload UI in `src/components/RoomPlanner.tsx`
+
+**Goal:** Upload an image, get back `FloorPlanData` JSON, feed it into state.
+
+1. **Create shared types file** `src/types/floorplan.ts` (~5 min)
+2. **Build API route** at `src/app/api/parse-floorplan/route.ts` (~30 min)
+   - Accept POST with base64 image
+   - Call LLM vision API with structured prompt asking for 16x12 boolean grid + rooms array
+   - Parse response, validate, return `FloorPlanData`
+3. **Add upload UI to RoomPlanner** (~25 min)
+   - Drag-and-drop zone + file picker above the 2D grid
+   - Image preview thumbnail, loading spinner
+   - On success: call `onFloorPlanParsed(data: FloorPlanData)`
+4. **Error handling + retry** (~10 min)
+   - Error toast for bad JSON, "Try Again" button
+5. **Test with real floor plan images** (~10 min)
+
+**Dependencies on others:** None.
+
+---
+
+### Person B: Isometric Renderer + Polish (frontend/canvas-focused)
+
+**Files:** `src/components/RoomPlanner.tsx` (iso canvas section), `src/app/globals.css`
+
+**Goal:** Make the iso view accept `FloorPlanData`, render room labels, support dynamic grid sizes, add export.
+
+1. **Wire `FloorPlanData` into state** (~15 min)
+   - `onFloorPlanParsed` handler updates `grid` and stores `rooms: Room[]`
+   - Support dynamic grid sizes (not just 12x8)
+2. **Render room labels on iso view** (~20 min)
+   - Calculate room center, convert to screen coords via `gridToScreen`
+   - Draw floating labels with background pill, color-coded by room type
+3. **Room-colored floor tiles** (~15 min)
+   - Color-code floor diamonds by room type (bedroom=blue, kitchen=yellow, etc.)
+4. **PNG export** (~10 min)
+   - "Download as PNG" button using `canvas.toDataURL('image/png')`
+5. **Entrance animation** (~10 min)
+   - Tiles appear row-by-row with staggered fade-in on new floor plan load
+6. **Integrate Person C's sprite drawing functions** (~10 min)
+
+**Dependencies:** Shared types from Person A (step 1). Sprite functions from Person C (step 6, do last).
+
+---
+
+### Person C: Assets + Auto-Furnish + Presets (art/logic-focused)
+
+**Files:** `src/lib/sprites.ts` (new), `src/lib/presets.ts` (new), auto-furnish logic in `RoomPlanner.tsx`
+
+**Goal:** Source pixel-art furniture sprites, build auto-furnish logic, create fallback presets.
+
+1. **Source pixel-art isometric furniture sprites** (~25 min)
+   - Existing sprites are city buildings (64px, pixelated, isometric). Need matching furniture.
+   - Sources: [Kenney.nl](https://kenney.nl), [OpenGameArt.org](https://opengameart.org), [itch.io free isometric](https://itch.io/game-assets/free/tag-isometric)
+   - Need: sofa, bed, table, chair, plant, bookshelf, desk, TV, fridge, bathtub, stove
+   - Target: ~64-128px wide PNGs, place in `public/assets/furniture/`
+2. **Build sprite loading + drawing** in `src/lib/sprites.ts` (~20 min)
+   - Image preloader for all furniture PNGs
+   - Export `drawFurnitureSprite(ctx, type, screenX, screenY, w, h)`
+   - Map `FurnitureType` to sprite paths, handle scaling
+3. **Auto-furnish logic** (~20 min)
+   - `autoFurnish(grid, rooms): FurnitureItem[]`
+   - Presets: bedroom=bed+plant, living_room=sofa+table+plant, kitchen=table+chairs, office=desk+chair
+   - Use `canPlaceItem()` for collision avoidance
+   - "Auto-Furnish" button in UI
+4. **Preset floor plans** in `src/lib/presets.ts` (~15 min)
+   - 2-3 hardcoded `FloorPlanData`: studio apartment, 2-bedroom, small office
+   - "Load Example" dropdown in UI
+
+**Dependencies on others:** None.
+
+---
+
+### Timeline
+
+| Time | Person A (AI Pipeline) | Person B (Iso Renderer) | Person C (Assets + Logic) |
+|------|----------------------|------------------------|--------------------------|
+| 0:00 | Agree on JSON schema together (5 min) | | |
+| 0:05 | API route + LLM prompt | Wire FloorPlanData, room labels | Source furniture sprites |
+| 0:45 | Upload UI + error handling | Room-colored tiles, PNG export | Sprite loading + drawing fns |
+| 1:15 | Test with real images | Entrance animation | Auto-furnish + presets |
+| 1:45 | Integration + end-to-end testing (all 3) | | |
+| 2:10 | Demo prep, polish, edge cases (all 3) | | |
 
 ### Key Files to Modify/Create
 
-- `src/components/RoomPlanner.tsx` -- add upload UI, auto-furnish, sprite rendering, export
-- `src/app/api/parse-floorplan/route.ts` -- new API route for AI floor plan parsing
+- `src/types/floorplan.ts` -- shared JSON schema (new)
+- `src/components/RoomPlanner.tsx` -- upload UI, state wiring, auto-furnish button
+- `src/app/api/parse-floorplan/route.ts` -- AI floor plan parsing (new)
+- `src/lib/sprites.ts` -- furniture sprite loading + drawing (new)
+- `src/lib/presets.ts` -- hardcoded example floor plans (new)
 - `src/app/globals.css` -- upload zone styles, animation keyframes
+- `public/assets/furniture/` -- pixel-art furniture sprite PNGs (new)
 
 ### Risk Mitigation
 
-- If GPT-4o Vision is unavailable: fall back to hardcoded example plans (item 5)
-- If sprite rendering takes too long: keep the colored-box approach but add gradients and shadows for a "good enough" visual upgrade
-- If time runs short: items 1 + 2 alone (AI upload + auto-furnish) are a complete demo story
+- **LLM API issues:** Person C's presets ensure a working demo regardless
+- **Can't find good sprites:** Keep colored-box approach but add gradients + shadows (15 min fix)
+- **Integration hiccups:** JSON contract minimizes these -- each person can test independently with hardcoded data
+- **Time runs short:** Items Person A + Person C auto-furnish alone = complete demo story
