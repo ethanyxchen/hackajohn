@@ -8,6 +8,7 @@ interface RenderOptions {
   offsetY: number;
   hoverTile: { x: number; y: number } | null;
   backgroundImage: HTMLImageElement | null;
+  spriteSheet: HTMLImageElement | null;
 }
 
 function drawTilePath(
@@ -97,12 +98,30 @@ function drawFurniture(
   ctx: CanvasRenderingContext2D,
   placed: PlacedFurniture,
   offsetX: number,
-  offsetY: number
+  offsetY: number,
+  spriteSheet: HTMLImageElement | null
 ) {
   const { item, gridX, gridY } = placed;
   const iso = gridToIso(gridX, gridY);
   const cx = iso.x + offsetX;
   const cy = iso.y + offsetY;
+
+  if (spriteSheet && item.sprite) {
+    const { x: sx, y: sy, w: sw, h: sh } = item.sprite;
+    const maxW = TILE_WIDTH * 1.1;
+    const scale = maxW / sw;
+    const dw = sw * scale;
+    const dh = sh * scale;
+    ctx.drawImage(
+      spriteSheet,
+      sx, sy, sw, sh,
+      cx - dw / 2,
+      cy - dh + TILE_HEIGHT / 2,
+      dw,
+      dh
+    );
+    return;
+  }
 
   const furnitureHeight = 24;
   const hw = (TILE_WIDTH / 2) * Math.min(item.width, 1);
@@ -157,7 +176,7 @@ function darkenColor(hex: string, factor: number): string {
 }
 
 export function renderGrid(options: RenderOptions) {
-  const { ctx, grid, offsetX, offsetY, hoverTile, backgroundImage } = options;
+  const { ctx, grid, offsetX, offsetY, hoverTile, backgroundImage, spriteSheet } = options;
   const canvas = ctx.canvas;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -213,6 +232,6 @@ export function renderGrid(options: RenderOptions) {
   }
 
   for (const placed of furnitureList) {
-    drawFurniture(ctx, placed, offsetX, offsetY);
+    drawFurniture(ctx, placed, offsetX, offsetY, spriteSheet);
   }
 }

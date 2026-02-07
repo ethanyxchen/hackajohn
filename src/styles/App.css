@@ -97,6 +97,13 @@
   flex-shrink: 0;
 }
 
+.furniture-preview {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  image-rendering: pixelated;
+}
+
 .furniture-name {
   flex: 1;
 }

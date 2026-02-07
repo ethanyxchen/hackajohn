@@ -12,6 +12,7 @@ interface Props {
   hasImage: boolean;
   drawMode: 'tile' | 'furniture';
   onSetDrawMode: (mode: 'tile' | 'furniture') => void;
+  spriteSheet: HTMLImageElement | null;
 }
 
 export default function Sidebar({
@@ -23,6 +24,7 @@ export default function Sidebar({
   hasImage,
   drawMode,
   onSetDrawMode,
+  spriteSheet,
 }: Props) {
   return (
     <aside className="sidebar">
@@ -67,6 +69,7 @@ export default function Sidebar({
                 item={item}
                 isSelected={selectedFurniture?.id === item.id}
                 onSelect={(f) => onSelectFurniture(f)}
+                spriteSheet={spriteSheet}
               />
             ))}
           </div>

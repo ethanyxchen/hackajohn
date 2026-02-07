@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { FurnitureItem } from './types';
 import { useGrid } from './hooks/useGrid';
+import { SPRITE_SHEET } from './data/furniture';
 import IsometricCanvas from './components/IsometricCanvas';
 import Sidebar from './components/Sidebar';
 import './styles/App.css';
@@ -10,6 +11,13 @@ export default function App() {
   const [selectedFurniture, setSelectedFurniture] = useState<FurnitureItem | null>(null);
   const [drawMode, setDrawMode] = useState<'tile' | 'furniture'>('tile');
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
+  const [spriteSheet, setSpriteSheet] = useState<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => setSpriteSheet(img);
+    img.src = SPRITE_SHEET;
+  }, []);
 
   const handleFurniturePlace = useCallback(
     (x: number, y: number) => {
@@ -31,6 +39,7 @@ export default function App() {
         hasImage={backgroundImage !== null}
         drawMode={drawMode}
         onSetDrawMode={setDrawMode}
+        spriteSheet={spriteSheet}
       />
       <main className="main">
         <IsometricCanvas
@@ -41,6 +50,7 @@ export default function App() {
           drawMode={drawMode}
           selectedFurniture={selectedFurniture}
           backgroundImage={backgroundImage}
+          spriteSheet={spriteSheet}
         />
       </main>
     </div>

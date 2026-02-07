@@ -1,12 +1,19 @@
 export type TileType = 'empty' | 'floor' | 'wall';
 
+export interface SpriteRegion {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface FurnitureItem {
   id: string;
   name: string;
-  width: number;  // grid cells
-  height: number; // grid cells
+  width: number;
+  height: number;
   color: string;
-  sprite?: string; // optional sprite URL for later
+  sprite?: SpriteRegion;
 }
 
 export interface PlacedFurniture {

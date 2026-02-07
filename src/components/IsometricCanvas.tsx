@@ -15,6 +15,7 @@ interface Props {
   drawMode: 'tile' | 'furniture';
   selectedFurniture: FurnitureItem | null;
   backgroundImage: HTMLImageElement | null;
+  spriteSheet: HTMLImageElement | null;
 }
 
 export default function IsometricCanvas({
@@ -25,6 +26,7 @@ export default function IsometricCanvas({
   drawMode,
   selectedFurniture,
   backgroundImage,
+  spriteSheet,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hoverTile, setHoverTile] = useState<{ x: number; y: number } | null>(null);
@@ -43,8 +45,9 @@ export default function IsometricCanvas({
       offsetY: offset.y,
       hoverTile,
       backgroundImage,
+      spriteSheet,
     });
-  }, [grid, offset, hoverTile, backgroundImage]);
+  }, [grid, offset, hoverTile, backgroundImage, spriteSheet]);
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
