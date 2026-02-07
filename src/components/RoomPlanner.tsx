@@ -596,12 +596,47 @@ export default function RoomPlanner() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [furnishing, setFurnishing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const spriteImages = useSpriteImages(SPRITE_BASE_MAP);
 
   const gridWidth = grid[0]?.length ?? 0;
   const gridHeight = grid.length;
+
+  // --- AI furnish helper ---
+  const aiFurnish = useCallback(async (targetGrid: boolean[][], targetRooms: Room[]) => {
+    if (targetRooms.length === 0) return;
+    setFurnishing(true);
+    setStatus('Designing interior layout with AI…');
+    try {
+      const res = await fetch('/api/furnish-rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grid: targetGrid, rooms: targetRooms }),
+      });
+      const data = await res.json();
+      if (!res.ok || !Array.isArray(data.furniture) || data.furniture.length === 0) {
+        // Fallback to algorithmic auto-furnish
+        const fallback = autoFurnish(targetGrid, targetRooms);
+        setItems(fallback);
+        setStatus(`AI furnish unavailable — placed ${fallback.length} items algorithmically.`);
+        return;
+      }
+      const placed: FurnitureItem[] = (data.furniture as Array<{ type: FurnitureType; x: number; y: number }>).map(
+        (f) => buildItem(f.type, f.x, f.y, 0)
+      );
+      setItems(placed);
+      setSelectedItemId(null);
+      setStatus(`AI designed interior with ${placed.length} furniture items!`);
+    } catch {
+      const fallback = autoFurnish(targetGrid, targetRooms);
+      setItems(fallback);
+      setStatus(`AI furnish failed — placed ${fallback.length} items algorithmically.`);
+    } finally {
+      setFurnishing(false);
+    }
+  }, []);
 
   // --- Upload handlers ---
   const onFloorPlanParsed = useCallback((data: FloorPlanData, furnish = true) => {
@@ -612,14 +647,17 @@ export default function RoomPlanner() {
     setSelectedItemId(null);
 
     if (furnish && data.rooms.length > 0) {
-      const furnished = autoFurnish(data.grid, data.rooms);
-      setItems(furnished);
-      setStatus(`Floor plan loaded with ${data.rooms.length} rooms and ${furnished.length} furniture items!`);
+      // Use simple auto-furnish immediately, then kick off AI furnish in the background
+      const quick = autoFurnish(data.grid, data.rooms);
+      setItems(quick);
+      setStatus(`Floor plan loaded — designing interior with AI…`);
+      // Fire-and-forget AI furnish (replaces items when done)
+      aiFurnish(data.grid, data.rooms);
     } else {
       setItems([]);
-      setStatus('Floor plan loaded! Use Auto-Furnish or drop furniture manually.');
+      setStatus('Floor plan loaded! Use AI Furnish or drop furniture manually.');
     }
-  }, []);
+  }, [aiFurnish]);
 
   const readFileAsDataUrl = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -675,7 +713,15 @@ export default function RoomPlanner() {
     }
   }, [uploadPreview, handleAnalyze]);
 
-  const handleAutoFurnish = useCallback(() => {
+  const handleAIFurnish = useCallback(() => {
+    if (rooms.length === 0) {
+      setStatus('No rooms detected. Upload a floor plan or load a sample first.');
+      return;
+    }
+    aiFurnish(grid, rooms);
+  }, [grid, rooms, aiFurnish]);
+
+  const handleQuickFurnish = useCallback(() => {
     if (rooms.length === 0) {
       setStatus('No rooms detected. Upload a floor plan or load a sample first.');
       return;
@@ -683,14 +729,13 @@ export default function RoomPlanner() {
     const furnished = autoFurnish(grid, rooms);
     setItems(furnished);
     setSelectedItemId(null);
-    setStatus(`Auto-furnished ${furnished.length} items across ${rooms.length} rooms.`);
+    setStatus(`Quick-furnished ${furnished.length} items across ${rooms.length} rooms.`);
   }, [grid, rooms]);
 
   const handleLoadPreset = useCallback((preset: SamplePreset) => {
     onFloorPlanParsed(preset.data, true);
     setUploadPreview(null);
     setUploadError(null);
-    setStatus(`Loaded "${preset.name}" with auto-furnished rooms.`);
   }, [onFloorPlanParsed]);
 
   const handlePlaceAt = useCallback((x: number, y: number) => {
@@ -859,7 +904,19 @@ export default function RoomPlanner() {
 
           <div className="actions">
             <button className="action-button primary" onClick={resetScene} type="button">Reset Scene</button>
-            <button className="action-button" onClick={handleAutoFurnish} type="button">Auto-Furnish</button>
+            <button
+              className="action-button accent"
+              onClick={handleAIFurnish}
+              disabled={furnishing || rooms.length === 0}
+              type="button"
+            >
+              {furnishing ? (
+                <><span className="spinner" /> Designing…</>
+              ) : (
+                'AI Furnish'
+              )}
+            </button>
+            <button className="action-button" onClick={handleQuickFurnish} type="button">Quick Furnish</button>
             <button className="action-button" onClick={clearFurniture} type="button">Clear Furniture</button>
           </div>
           <p className="note">Tip: click in the isometric view to place furniture. Drag items to move them.</p>

@@ -291,6 +291,17 @@ a {
   color: #d9fff7;
 }
 
+.action-button.accent {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.action-button.accent:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .note {
   font-size: 0.8rem;
   color: var(--muted);
