@@ -19,6 +19,8 @@ type FurnitureItem = {
   rotation: 0 | 90;
 };
 
+type ViewRotation = 0 | 90 | 180 | 270;
+
 type FurniturePaletteItem = {
   label: string;
   w: number;
@@ -269,6 +271,50 @@ function itemCells(item: FurnitureItem): Array<{ x: number; y: number }> {
   return cells;
 }
 
+function getRotatedDims(width: number, height: number, rotation: ViewRotation) {
+  if (rotation === 90 || rotation === 270) {
+    return { width: height, height: width };
+  }
+  return { width, height };
+}
+
+function toRotated(x: number, y: number, width: number, height: number, rotation: ViewRotation) {
+  switch (rotation) {
+    case 90:
+      return { x: height - 1 - y, y: x };
+    case 180:
+      return { x: width - 1 - x, y: height - 1 - y };
+    case 270:
+      return { x: y, y: width - 1 - x };
+    default:
+      return { x, y };
+  }
+}
+
+function toOriginal(x: number, y: number, width: number, height: number, rotation: ViewRotation) {
+  switch (rotation) {
+    case 90:
+      return { x: y, y: height - 1 - x };
+    case 180:
+      return { x: width - 1 - x, y: height - 1 - y };
+    case 270:
+      return { x: width - 1 - y, y: x };
+    default:
+      return { x, y };
+  }
+}
+
+function rotateItem(item: FurnitureItem, width: number, height: number, rotation: ViewRotation) {
+  const cells = itemCells(item).map((cell) => toRotated(cell.x, cell.y, width, height, rotation));
+  const xs = cells.map((c) => c.x);
+  const ys = cells.map((c) => c.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  return { ...item, x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+}
+
 function isFloorTile(grid: boolean[][], x: number, y: number): boolean {
   return grid[y]?.[x] ?? false;
 }
@@ -369,6 +415,7 @@ export default function RoomPlanner() {
   const [tool, setTool] = useState<Tool>('floor');
   const [activeFurniture, setActiveFurniture] = useState<FurnitureType>('sofa');
   const [rotation, setRotation] = useState<0 | 90>(0);
+  const [viewRotation, setViewRotation] = useState<ViewRotation>(0);
   const [status, setStatus] = useState<string>('Drag furniture in the isometric view to move it.');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -650,7 +697,7 @@ export default function RoomPlanner() {
               onClick={() => setRotation((prev) => (prev === 0 ? 90 : 0))}
               type="button"
             >
-              Rotate {rotation === 0 ? '0°' : '90°'}
+              Rotate Furniture {rotation === 0 ? '0°' : '90°'}
             </button>
           </div>
 
@@ -718,10 +765,23 @@ export default function RoomPlanner() {
 
         <div className="panel">
           <h2>Isometric Room</h2>
+          <div className="tool-row">
+            <button
+              className="tool-button"
+              onClick={() =>
+                setViewRotation((prev) => ((prev + 90) % 360) as ViewRotation)
+              }
+              type="button"
+            >
+              Rotate View {viewRotation}°
+            </button>
+          </div>
           <IsoRoomCanvas
             grid={grid}
+            baseGrid={baseGrid}
             items={items}
             spriteImages={spriteImages}
+            viewRotation={viewRotation}
             onMoveItem={(id, nextX, nextY) => {
               setItems((prev) =>
                 prev.map((item) =>
@@ -734,7 +794,7 @@ export default function RoomPlanner() {
             selectedItemId={selectedItemId}
             onSelectItem={setSelectedItemId}
           />
-          <div className="status">{status}</div>
+          <div className="status">{status} Drag empty space to pan, scroll to zoom.</div>
         </div>
       </section>
     </>
@@ -743,22 +803,44 @@ export default function RoomPlanner() {
 
 type IsoRoomCanvasProps = {
   grid: boolean[][];
+  baseGrid: boolean[][] | null;
   items: FurnitureItem[];
   spriteImages: Record<string, HTMLImageElement>;
+  viewRotation: ViewRotation;
   onMoveItem: (id: string, x: number, y: number) => void;
   selectedItemId: string | null;
   onSelectItem: (id: string | null) => void;
 };
 
-function IsoRoomCanvas({ grid, items, spriteImages, onMoveItem, selectedItemId, onSelectItem }: IsoRoomCanvasProps) {
+function IsoRoomCanvas({
+  grid,
+  baseGrid,
+  items,
+  spriteImages,
+  viewRotation,
+  onMoveItem,
+  selectedItemId,
+  onSelectItem
+}: IsoRoomCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const offsetRef = useRef({ x: 0, y: 0 });
   const dragRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null);
+  const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 600, height: 520 });
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
 
   const gridWidth = grid[0]?.length ?? 0;
   const gridHeight = grid.length;
+  const baseCols = baseGrid?.[0]?.length ?? gridWidth;
+  const baseRows = baseGrid?.length ?? gridHeight;
+  const { width: viewWidth, height: viewHeight } = getRotatedDims(gridWidth, gridHeight, viewRotation);
+  const viewItems = useMemo(
+    () => items.map((item) => rotateItem(item, gridWidth, gridHeight, viewRotation)),
+    [gridHeight, gridWidth, items, viewRotation]
+  );
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -785,11 +867,20 @@ function IsoRoomCanvas({ grid, items, spriteImages, onMoveItem, selectedItemId, 
     ctx.clearRect(0, 0, canvasSize.width, canvasSize.height);
 
     const wallHeight = 42;
+    const baseScale =
+      viewRotation === 90 || viewRotation === 270
+        ? (baseRows > 0 && gridHeight > 0 ? baseRows / gridHeight : 1)
+        : (baseCols > 0 && gridWidth > 0 ? baseCols / gridWidth : 1);
+    const scale = baseScale * zoom;
+
+    ctx.scale(scale, scale);
+    ctx.translate(pan.x / scale, pan.y / scale);
+
     const corners = [
       gridToScreen(0, 0, 0, 0),
-      gridToScreen(gridWidth - 1, 0, 0, 0),
-      gridToScreen(0, gridHeight - 1, 0, 0),
-      gridToScreen(gridWidth - 1, gridHeight - 1, 0, 0)
+      gridToScreen(viewWidth - 1, 0, 0, 0),
+      gridToScreen(0, viewHeight - 1, 0, 0),
+      gridToScreen(viewWidth - 1, viewHeight - 1, 0, 0)
     ];
 
     const minX = Math.min(...corners.map((c) => c.screenX));
@@ -800,8 +891,10 @@ function IsoRoomCanvas({ grid, items, spriteImages, onMoveItem, selectedItemId, 
     const roomWidth = maxX - minX;
     const roomHeight = maxY - minY;
 
-    const offsetX = (canvasSize.width - roomWidth) / 2 - minX;
-    const offsetY = (canvasSize.height - roomHeight) / 2 - minY + 24;
+    const viewportWidth = canvasSize.width / scale;
+    const viewportHeight = canvasSize.height / scale;
+    const offsetX = (viewportWidth - roomWidth) / 2 - minX;
+    const offsetY = (viewportHeight - roomHeight) / 2 - minY + 24;
     offsetRef.current = { x: offsetX, y: offsetY };
 
     const drawDiamond = (x: number, y: number, fill: string, stroke?: string) => {
@@ -942,43 +1035,63 @@ function IsoRoomCanvas({ grid, items, spriteImages, onMoveItem, selectedItemId, 
     };
 
     // Draw floor tiles
-    for (let y = 0; y < gridHeight; y += 1) {
-      for (let x = 0; x < gridWidth; x += 1) {
-        if (!isFloorTile(grid, x, y)) continue;
+    for (let y = 0; y < viewHeight; y += 1) {
+      for (let x = 0; x < viewWidth; x += 1) {
+        const original = toOriginal(x, y, gridWidth, gridHeight, viewRotation);
+        if (!isFloorTile(grid, original.x, original.y)) continue;
         const { screenX, screenY } = gridToScreen(x, y, offsetX, offsetY);
         drawDiamond(screenX, screenY, 'rgba(55, 77, 95, 0.75)', 'rgba(36, 55, 70, 0.8)');
       }
     }
 
     // Draw walls
-    for (let y = 0; y < gridHeight; y += 1) {
-      for (let x = 0; x < gridWidth; x += 1) {
-        if (!isFloorTile(grid, x, y)) continue;
+    for (let y = 0; y < viewHeight; y += 1) {
+      for (let x = 0; x < viewWidth; x += 1) {
+        const original = toOriginal(x, y, gridWidth, gridHeight, viewRotation);
+        if (!isFloorTile(grid, original.x, original.y)) continue;
         const { screenX, screenY } = gridToScreen(x, y, offsetX, offsetY);
-        if (!isFloorTile(grid, x, y - 1)) {
+        const originalNorth = toOriginal(x, y - 1, gridWidth, gridHeight, viewRotation);
+        const originalWest = toOriginal(x - 1, y, gridWidth, gridHeight, viewRotation);
+        if (!isFloorTile(grid, originalNorth.x, originalNorth.y)) {
           drawNorthWall(screenX, screenY);
         }
-        if (!isFloorTile(grid, x - 1, y)) {
+        if (!isFloorTile(grid, originalWest.x, originalWest.y)) {
           drawWestWall(screenX, screenY);
         }
       }
     }
 
     // Draw furniture items sorted by depth
-    const sortedItems = [...items].sort((a, b) => (a.x + a.y) - (b.x + b.y));
-    for (const item of sortedItems) {
-      const img = spriteImages[item.type];
-      if (img && SPRITE_MAP[item.type]) {
-        drawSprite(item, img);
+    const sortedItems = [...viewItems].sort((a, b) => (a.x + a.y) - (b.x + b.y));
+    for (const viewItem of sortedItems) {
+      const img = spriteImages[viewItem.type];
+      if (img && SPRITE_MAP[viewItem.type]) {
+        drawSprite(viewItem, img);
       } else {
-        drawCuboid(item);
+        drawCuboid(viewItem);
       }
 
-      if (item.id === selectedItemId) {
-        drawSelectionHighlight(item);
+      if (viewItem.id === selectedItemId) {
+        drawSelectionHighlight(viewItem);
       }
     }
-  }, [canvasSize, grid, gridHeight, gridWidth, items, selectedItemId, spriteImages]);
+  }, [
+    baseCols,
+    baseRows,
+    canvasSize,
+    grid,
+    gridHeight,
+    gridWidth,
+    pan.x,
+    pan.y,
+    selectedItemId,
+    spriteImages,
+    viewHeight,
+    viewItems,
+    viewRotation,
+    viewWidth,
+    zoom
+  ]);
 
   useEffect(() => {
     drawScene();
@@ -990,48 +1103,133 @@ function IsoRoomCanvas({ grid, items, spriteImages, onMoveItem, selectedItemId, 
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
-    const { gridX, gridY } = screenToGrid(x, y, offsetRef.current.x, offsetRef.current.y);
+    const baseScale =
+      viewRotation === 90 || viewRotation === 270
+        ? (baseRows > 0 && gridHeight > 0 ? baseRows / gridHeight : 1)
+        : (baseCols > 0 && gridWidth > 0 ? baseCols / gridWidth : 1);
+    const scale = baseScale * zoom;
+    const localX = (x - pan.x) / scale;
+    const localY = (y - pan.y) / scale;
+    const { gridX, gridY } = screenToGrid(localX, localY, offsetRef.current.x, offsetRef.current.y);
+    const original = toOriginal(gridX, gridY, gridWidth, gridHeight, viewRotation);
 
-    const item = findItemAt(items, gridX, gridY);
+    const item = findItemAt(items, original.x, original.y);
     if (item) {
-      dragRef.current = { id: item.id, offsetX: gridX - item.x, offsetY: gridY - item.y };
+      dragRef.current = { id: item.id, offsetX: original.x - item.x, offsetY: original.y - item.y };
       onSelectItem(item.id);
-    } else {
-      onSelectItem(null);
+      return;
     }
-  }, [items, onSelectItem]);
+
+    onSelectItem(null);
+    // If clicking empty space, start panning with left-click too.
+    if (event.button === 0 || event.button === 1 || event.button === 2 || event.shiftKey) {
+      setIsPanning(true);
+      panStartRef.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
+    }
+  }, [baseCols, baseRows, gridHeight, gridWidth, items, onSelectItem, pan.x, pan.y, viewRotation, zoom]);
 
   const handlePointerMove = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (isPanning && panStartRef.current) {
+      const dx = event.clientX - panStartRef.current.x;
+      const dy = event.clientY - panStartRef.current.y;
+      setPan({ x: panStartRef.current.panX + dx, y: panStartRef.current.panY + dy });
+      return;
+    }
     if (!dragRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
-    const { gridX, gridY } = screenToGrid(x, y, offsetRef.current.x, offsetRef.current.y);
+    const baseScale =
+      viewRotation === 90 || viewRotation === 270
+        ? (baseRows > 0 && gridHeight > 0 ? baseRows / gridHeight : 1)
+        : (baseCols > 0 && gridWidth > 0 ? baseCols / gridWidth : 1);
+    const scale = baseScale * zoom;
+    const localX = (x - pan.x) / scale;
+    const localY = (y - pan.y) / scale;
+    const { gridX, gridY } = screenToGrid(localX, localY, offsetRef.current.x, offsetRef.current.y);
+    const original = toOriginal(gridX, gridY, gridWidth, gridHeight, viewRotation);
     const active = items.find((item) => item.id === dragRef.current?.id);
     if (!active) return;
 
-    const nextX = clamp(gridX - dragRef.current.offsetX, 0, gridWidth - active.w);
-    const nextY = clamp(gridY - dragRef.current.offsetY, 0, gridHeight - active.h);
+    const nextX = clamp(original.x - dragRef.current.offsetX, 0, gridWidth - active.w);
+    const nextY = clamp(original.y - dragRef.current.offsetY, 0, gridHeight - active.h);
     const candidate = { ...active, x: nextX, y: nextY };
     if (canPlaceItem(grid, items, candidate, active.id)) {
       onMoveItem(active.id, nextX, nextY);
     }
-  }, [grid, gridHeight, gridWidth, items, onMoveItem]);
+  }, [baseCols, baseRows, grid, gridHeight, gridWidth, isPanning, items, onMoveItem, pan.x, pan.y, viewRotation, zoom]);
 
   const handlePointerUp = useCallback(() => {
     dragRef.current = null;
+    setIsPanning(false);
+    panStartRef.current = null;
   }, []);
+
+  const handleWheel = useCallback((event: React.WheelEvent<HTMLCanvasElement>) => {
+    event.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    const baseScale =
+      viewRotation === 90 || viewRotation === 270
+        ? (baseRows > 0 && gridHeight > 0 ? baseRows / gridHeight : 1)
+        : (baseCols > 0 && gridWidth > 0 ? baseCols / gridWidth : 1);
+    const scale = baseScale * zoom;
+    const worldX = (x - pan.x) / scale;
+    const worldY = (y - pan.y) / scale;
+
+    const nextZoom = Math.min(4, Math.max(0.4, zoom * (event.deltaY > 0 ? 0.9 : 1.1)));
+    const nextScale = baseScale * nextZoom;
+    const nextPanX = x - worldX * nextScale;
+    const nextPanY = y - worldY * nextScale;
+    setZoom(nextZoom);
+    setPan({ x: nextPanX, y: nextPanY });
+  }, [baseCols, baseRows, gridHeight, gridWidth, pan.x, pan.y, viewRotation, zoom]);
+
+  useEffect(() => {
+    if (gridWidth === 0 || gridHeight === 0) return;
+    const wallHeight = 42;
+    const corners = [
+      gridToScreen(0, 0, 0, 0),
+      gridToScreen(viewWidth - 1, 0, 0, 0),
+      gridToScreen(0, viewHeight - 1, 0, 0),
+      gridToScreen(viewWidth - 1, viewHeight - 1, 0, 0)
+    ];
+    const minX = Math.min(...corners.map((c) => c.screenX));
+    const maxX = Math.max(...corners.map((c) => c.screenX + TILE_WIDTH));
+    const minY = Math.min(...corners.map((c) => c.screenY));
+    const maxY = Math.max(...corners.map((c) => c.screenY + TILE_HEIGHT + wallHeight));
+    const roomWidth = maxX - minX;
+    const roomHeight = maxY - minY;
+
+    const baseScale =
+      viewRotation === 90 || viewRotation === 270
+        ? (baseRows > 0 && gridHeight > 0 ? baseRows / gridHeight : 1)
+        : (baseCols > 0 && gridWidth > 0 ? baseCols / gridWidth : 1);
+    const fitZoom = Math.min(
+      (canvasSize.width - 32) / (roomWidth * baseScale),
+      (canvasSize.height - 32) / (roomHeight * baseScale)
+    );
+    const clamped = Math.min(4, Math.max(0.4, fitZoom));
+    setZoom(clamped);
+    setPan({ x: 0, y: 0 });
+  }, [baseCols, baseRows, canvasSize.height, canvasSize.width, gridHeight, gridWidth, viewHeight, viewRotation, viewWidth]);
 
   return (
     <div className="canvas-wrap" ref={containerRef}>
       <canvas
         ref={canvasRef}
+        onContextMenu={(event) => event.preventDefault()}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
+        onWheel={handleWheel}
       />
     </div>
   );

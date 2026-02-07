@@ -25,7 +25,8 @@ Schema:
 
 Rules:
 1. grid must be exactly ${cols} columns and ${rows} rows. grid[y][x]: true = floor/walkable, false = wall or outside.
-2. Map the floor plan proportionally onto this grid. Interior floor space = true, walls and exterior = false.
+2. Map the floor plan proportionally onto this grid. Interior floor space = true, walls, voids, and exterior = false.
+3. Do NOT assume the floor is a full rectangle. Preserve irregular shapes, cutouts, and courtyards visible in the plan.
 3. rooms: detect each distinct room. type must be one of: bedroom, living_room, kitchen, bathroom, hallway, office. label is a short name like "Master Bedroom" or "Kitchen". x,y = top-left cell of the room in grid coords (0-indexed). w,h = width and height in cells. Every room must fit inside the grid and only cover cells where grid[y][x] is true.
 4. Return only the JSON object, no explanation.`;
 }
