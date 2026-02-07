@@ -3,11 +3,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { gridToScreen, screenToGrid } from '@isocity/components/game/utils';
 import { TILE_HEIGHT, TILE_WIDTH } from '@isocity/components/game/types';
-import type { FloorPlanData, Room, RoomType } from '@/types/floorplan';
 
 type Tool = 'floor' | 'erase' | 'furniture';
 
-type FurnitureType = 'sofa' | 'bed' | 'table' | 'chair' | 'plant';
+type FurnitureType = 'sofa' | 'bed' | 'table' | 'chair' | 'plant' | 'bookshelf' | 'lamp' | 'nightstand' | 'stove' | 'television';
 
 type FurnitureItem = {
   id: string;
@@ -66,10 +65,10 @@ const FURNITURE_CATALOG: Record<FurnitureType, FurniturePaletteItem> = {
     w: 1,
     h: 1,
     height: 14,
-    top: '#9bd3c8',
-    side: '#6fb7aa',
-    front: '#5fa296',
-    swatch: '#87c5ba'
+    top: '#e8a84c',
+    side: '#c78432',
+    front: '#b07228',
+    swatch: '#e89830'
   },
   plant: {
     label: 'Plant',
@@ -80,41 +79,115 @@ const FURNITURE_CATALOG: Record<FurnitureType, FurniturePaletteItem> = {
     side: '#7faa5b',
     front: '#6f914e',
     swatch: '#86b764'
+  },
+  bookshelf: {
+    label: 'Bookshelf',
+    w: 1,
+    h: 1,
+    height: 28,
+    top: '#e8a84c',
+    side: '#c78432',
+    front: '#a06828',
+    swatch: '#d49038'
+  },
+  lamp: {
+    label: 'Lamp',
+    w: 1,
+    h: 1,
+    height: 24,
+    top: '#d4c878',
+    side: '#b0a45c',
+    front: '#988c4c',
+    swatch: '#c8bc68'
+  },
+  nightstand: {
+    label: 'Side Table',
+    w: 1,
+    h: 1,
+    height: 14,
+    top: '#e8a84c',
+    side: '#c78432',
+    front: '#a06828',
+    swatch: '#d49038'
+  },
+  stove: {
+    label: 'Stove',
+    w: 1,
+    h: 1,
+    height: 20,
+    top: '#e8e0d0',
+    side: '#b09080',
+    front: '#e8e0d0',
+    swatch: '#c8b8a8'
+  },
+  television: {
+    label: 'Television',
+    w: 1,
+    h: 1,
+    height: 22,
+    top: '#c8c8c8',
+    side: '#888888',
+    front: '#a8a8a8',
+    swatch: '#999999'
   }
 };
+
+// Kenney sprite base tile is 208px wide; our TILE_WIDTH is 64
+const KENNEY_TILE_PX = 208;
+
+type SpriteInfo = {
+  src: string;
+  /** native pixel width */
+  pw: number;
+  /** native pixel height */
+  ph: number;
+};
+
+const SPRITE_MAP: Partial<Record<FurnitureType, SpriteInfo>> = {
+  sofa:       { src: '/sprites/kenney/loungeSofa_SE.png',       pw: 141, ph: 141 },
+  bed:        { src: '/sprites/kenney/bedDouble_SE.png',        pw: 215, ph: 190 },
+  table:      { src: '/sprites/kenney/table_SE.png',            pw: 133, ph: 129 },
+  chair:      { src: '/sprites/kenney/chair_SE.png',            pw: 42,  ph: 79  },
+  plant:      { src: '/sprites/kenney/pottedPlant_SE.png',      pw: 28,  ph: 85  },
+  bookshelf:  { src: '/sprites/kenney/bookcaseOpen_SE.png',     pw: 67,  ph: 140 },
+  lamp:       { src: '/sprites/kenney/lampRoundFloor_SE.png',   pw: 24,  ph: 105 },
+  nightstand: { src: '/sprites/kenney/sideTable_SE.png',        pw: 78,  ph: 95  },
+  stove:      { src: '/sprites/kenney/kitchenStove_SE.png',     pw: 92,  ph: 109 },
+  television: { src: '/sprites/kenney/televisionModern_SE.png', pw: 74,  ph: 93  },
+};
+
+function useSpriteImages(spriteMap: Partial<Record<FurnitureType, SpriteInfo>>): Record<string, HTMLImageElement> {
+  const [images, setImages] = useState<Record<string, HTMLImageElement>>({});
+
+  useEffect(() => {
+    const entries = Object.entries(spriteMap) as [FurnitureType, SpriteInfo][];
+    let cancelled = false;
+    const loaded: Record<string, HTMLImageElement> = {};
+    let remaining = entries.length;
+
+    for (const [type, info] of entries) {
+      const img = new Image();
+      img.onload = () => {
+        loaded[type] = img;
+        remaining -= 1;
+        if (remaining === 0 && !cancelled) {
+          setImages({ ...loaded });
+        }
+      };
+      img.src = info.src;
+    }
+
+    return () => { cancelled = true; };
+  }, [spriteMap]);
+
+  return images;
+}
 
 const DEFAULT_WIDTH = 12;
 const DEFAULT_HEIGHT = 8;
 
-const ROOM_COLORS: Record<RoomType, { fill: string; label: string }> = {
-  bedroom: { fill: 'rgba(86, 140, 214, 0.65)', label: 'rgba(86, 140, 214, 0.9)' },
-  living_room: { fill: 'rgba(120, 201, 172, 0.6)', label: 'rgba(120, 201, 172, 0.9)' },
-  kitchen: { fill: 'rgba(242, 192, 107, 0.7)', label: 'rgba(242, 192, 107, 0.95)' },
-  bathroom: { fill: 'rgba(109, 178, 207, 0.65)', label: 'rgba(109, 178, 207, 0.95)' },
-  hallway: { fill: 'rgba(195, 164, 122, 0.6)', label: 'rgba(195, 164, 122, 0.9)' },
-  office: { fill: 'rgba(135, 206, 125, 0.6)', label: 'rgba(135, 206, 125, 0.9)' }
-};
-
-const MOCK_ROOMS: Room[] = [
-  { type: 'living_room', label: 'Living Room', x: 0, y: 0, w: 5, h: 4 },
-  { type: 'kitchen', label: 'Kitchen', x: 5, y: 0, w: 3, h: 3 },
-  { type: 'hallway', label: 'Hallway', x: 8, y: 0, w: 4, h: 8 },
-  { type: 'bedroom', label: 'Bedroom', x: 0, y: 4, w: 5, h: 4 },
-  { type: 'bathroom', label: 'Bath', x: 5, y: 3, w: 3, h: 2 },
-  { type: 'office', label: 'Office', x: 5, y: 5, w: 3, h: 3 }
-];
-
 function createFloor(width: number, height: number): boolean[][] {
   return Array.from({ length: height }, () => Array.from({ length: width }, () => true));
-}
-
-function findRoomAt(rooms: Room[], x: number, y: number): Room | null {
-  for (const room of rooms) {
-    if (x >= room.x && x < room.x + room.w && y >= room.y && y < room.y + room.h) {
-      return room;
-    }
-  }
-  return null;
 }
 
 function createId(): string {
@@ -195,8 +268,42 @@ function sanitizeItems(grid: boolean[][], items: FurnitureItem[]): FurnitureItem
   });
 }
 
+function SpritePreview({ type, images }: { type: FurnitureType; images: Record<string, HTMLImageElement> }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const img = images[type];
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !img) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const cw = 80;
+    const ch = 60;
+    canvas.width = cw * dpr;
+    canvas.height = ch * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cw, ch);
+
+    const scale = Math.min(cw / img.naturalWidth, ch / img.naturalHeight) * 0.85;
+    const dw = img.naturalWidth * scale;
+    const dh = img.naturalHeight * scale;
+    const dx = (cw - dw) / 2;
+    const dy = (ch - dh) / 2;
+
+    ctx.drawImage(img, dx, dy, dw, dh);
+  }, [img]);
+
+  if (!img) {
+    return <div className="furniture-swatch" style={{ background: FURNITURE_CATALOG[type].swatch }} />;
+  }
+
+  return <canvas ref={canvasRef} className="furniture-preview" />;
+}
+
 export default function RoomPlanner() {
-  const isoCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [grid, setGrid] = useState<boolean[][]>(() => createFloor(DEFAULT_WIDTH, DEFAULT_HEIGHT));
   const [items, setItems] = useState<FurnitureItem[]>(() => [
     buildItem('sofa', 2, 2, 0),
@@ -204,31 +311,16 @@ export default function RoomPlanner() {
     buildItem('bed', 7, 2, 0),
     buildItem('plant', 1, 5, 0)
   ]);
-  const [rooms, setRooms] = useState<Room[]>(() => MOCK_ROOMS);
   const [tool, setTool] = useState<Tool>('floor');
   const [activeFurniture, setActiveFurniture] = useState<FurnitureType>('sofa');
   const [rotation, setRotation] = useState<0 | 90>(0);
   const [status, setStatus] = useState<string>('Drag furniture in the isometric view to move it.');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const spriteImages = useSpriteImages(SPRITE_MAP);
 
   const gridWidth = grid[0]?.length ?? 0;
   const gridHeight = grid.length;
-  const roomCount = rooms.length;
-
-  const handleDownload = useCallback(() => {
-    const canvas = isoCanvasRef.current;
-    if (!canvas) return;
-    const url = canvas.toDataURL('image/png');
-    const link = document.createElement('a');
-    link.download = 'iso-room.png';
-    link.href = url;
-    link.click();
-  }, []);
 
   const occupancy = useMemo(() => {
     const map = new Map<string, FurnitureType>();
@@ -276,7 +368,6 @@ export default function RoomPlanner() {
       buildItem('bed', 7, 2, 0),
       buildItem('plant', 1, 5, 0)
     ]);
-    setRooms(MOCK_ROOMS);
     setStatus('Reset to a clean, playable scene.');
   }, []);
 
@@ -286,74 +377,115 @@ export default function RoomPlanner() {
     setStatus('Cleared all furniture.');
   }, []);
 
-  const onFloorPlanParsed = useCallback((data: FloorPlanData) => {
-    setGrid(data.grid);
-    setRooms(data.rooms);
-    setItems([]);
-    setSelectedItemId(null);
-    setUploadPreview(null);
-    setUploadError(null);
-    setStatus(`Loaded floor plan with ${data.rooms.length} room(s). Use Auto-Furnish or place furniture manually.`);
-  }, []);
-
-  const readFileAsDataUrl = (file: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
-  const handleFiles = useCallback(
-    (files: FileList | null) => {
-      if (!files?.length) return;
-      const file = files[0];
-      if (!file.type.startsWith('image/')) {
-        setUploadError('Please choose an image file (PNG, JPEG, etc.).');
-        return;
-      }
-      setUploadError(null);
-      readFileAsDataUrl(file).then(setUploadPreview);
-    },
-    []
-  );
-
-  const handleAnalyze = useCallback(async () => {
-    if (!uploadPreview) return;
-    setUploading(true);
-    setUploadError(null);
-    try {
-      const res = await fetch('/api/parse-floorplan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: uploadPreview }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setUploadError(data?.error ?? 'Analysis failed.');
-        return;
-      }
-      onFloorPlanParsed(data as FloorPlanData);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Network error.');
-    } finally {
-      setUploading(false);
-    }
-  }, [uploadPreview, onFloorPlanParsed]);
-
-  const handleTryAgain = useCallback(() => {
-    setUploadError(null);
-    if (uploadPreview) handleAnalyze();
-  }, [uploadPreview, handleAnalyze]);
-
   return (
     <>
-      <section className="planner">
-        <div className="canvas-layer">
+      <header className="header">
+        <h1>Iso Room Planner</h1>
+        <p>Sketch a floor plan, then watch it snap into a cozy isometric room. Drop furniture on the plan or drag it around in the 3D view.</p>
+      </header>
+
+      <section className="main">
+        <div className="panel">
+          <h2>Floor Plan</h2>
+          <div className="tool-row">
+            <button
+              className={`tool-button ${tool === 'floor' ? 'active' : ''}`}
+              onClick={() => setTool('floor')}
+              type="button"
+            >
+              Add Floor
+            </button>
+            <button
+              className={`tool-button ${tool === 'erase' ? 'active' : ''}`}
+              onClick={() => setTool('erase')}
+              type="button"
+            >
+              Erase
+            </button>
+            <button
+              className={`tool-button ${tool === 'furniture' ? 'active' : ''}`}
+              onClick={() => setTool('furniture')}
+              type="button"
+            >
+              Place Furniture
+            </button>
+          </div>
+
+          <div className="furniture-list">
+            {Object.entries(FURNITURE_CATALOG).map(([key, data]) => (
+              <button
+                key={key}
+                type="button"
+                className={`furniture-card ${activeFurniture === key ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveFurniture(key as FurnitureType);
+                  setTool('furniture');
+                }}
+              >
+                <SpritePreview type={key as FurnitureType} images={spriteImages} />
+                <strong>{data.label}</strong>
+                <div className="note">{data.w}x{data.h} tiles</div>
+              </button>
+            ))}
+          </div>
+
+          <div className="tool-row">
+            <button
+              className="tool-button"
+              onClick={() => setRotation((prev) => (prev === 0 ? 90 : 0))}
+              type="button"
+            >
+              Rotate {rotation === 0 ? '0°' : '90°'}
+            </button>
+          </div>
+
+          <div
+            className="grid"
+            style={{ gridTemplateColumns: `repeat(${gridWidth}, 28px)` }}
+          >
+            {grid.map((row, y) =>
+              row.map((cell, x) => {
+                const key = `${x},${y}`;
+                const itemType = occupancy.get(key);
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`grid-cell ${cell ? 'floor' : 'blocked'}`}
+                    onClick={() => handleCellClick(x, y)}
+                    title={cell ? 'Floor' : 'Empty'}
+                    style={
+                      itemType
+                        ? { background: FURNITURE_CATALOG[itemType].swatch, color: '#0b0f14' }
+                        : undefined
+                    }
+                  >
+                    {itemType ? itemType[0].toUpperCase() : ''}
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          <div className="legend">
+            <span><i style={{ background: 'rgba(108, 212, 197, 0.6)' }} /> Floor</span>
+            <span><i style={{ background: 'rgba(224, 122, 95, 0.5)' }} /> Empty</span>
+            <span><i style={{ background: 'var(--accent)' }} /> Furniture</span>
+          </div>
+
+          <div className="actions">
+            <button className="action-button primary" onClick={resetScene} type="button">Reset Scene</button>
+            <button className="action-button" onClick={clearFurniture} type="button">Clear Furniture</button>
+          </div>
+          <p className="note">Tip: click any tile while in Place Furniture mode to drop items. Drag items around in the isometric view.</p>
+        </div>
+
+        <div className="panel">
+          <h2>Isometric Room</h2>
           <IsoRoomCanvas
             grid={grid}
-            rooms={rooms}
             items={items}
+            spriteImages={spriteImages}
             onMoveItem={(id, nextX, nextY) => {
               setItems((prev) =>
                 prev.map((item) =>
@@ -365,179 +497,8 @@ export default function RoomPlanner() {
             }}
             selectedItemId={selectedItemId}
             onSelectItem={setSelectedItemId}
-            canvasRef={isoCanvasRef}
           />
-        </div>
-
-        <div className="hud">
-          <div className="hud-top">
-            <button className="hud-button" type="button">Pause</button>
-            <button className="hud-button secondary" type="button">Play</button>
-          </div>
-
-          <div className="hud-right">
-            <div className="hud-panel">
-              <h2>Upload Floor Plan</h2>
-              <div
-                className={`upload-zone ${dragOver ? 'dragover' : ''}`}
-                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="upload-input"
-                  onChange={(e) => handleFiles(e.target.files)}
-                />
-                {uploadPreview ? (
-                  <div className="upload-preview">
-                    <img src={uploadPreview} alt="Floor plan preview" />
-                    <div className="upload-actions">
-                      <button
-                        type="button"
-                        className="action-button primary"
-                        onClick={(e) => { e.stopPropagation(); handleAnalyze(); }}
-                        disabled={uploading}
-                      >
-                        {uploading ? (
-                          <>
-                            <span className="spinner" /> Analyzing…
-                          </>
-                        ) : (
-                          'Analyze Floor Plan'
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        className="tool-button"
-                        onClick={(e) => { e.stopPropagation(); setUploadPreview(null); setUploadError(null); }}
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <p>Drop a floor plan image here or click to browse</p>
-                )}
-              </div>
-              {uploadError && (
-                <div className="upload-error">
-                  <span>{uploadError}</span>
-                  <button type="button" className="tool-button" onClick={handleTryAgain}>Try Again</button>
-                </div>
-              )}
-            </div>
-
-            <div className="hud-panel">
-              <h2>Floor Plan</h2>
-              <div className="tool-row">
-                <button
-                  className={`tool-button ${tool === 'floor' ? 'active' : ''}`}
-                  onClick={() => setTool('floor')}
-                  type="button"
-                >
-                  Add Floor
-                </button>
-                <button
-                  className={`tool-button ${tool === 'erase' ? 'active' : ''}`}
-                  onClick={() => setTool('erase')}
-                  type="button"
-                >
-                  Erase
-                </button>
-                <button
-                  className={`tool-button ${tool === 'furniture' ? 'active' : ''}`}
-                  onClick={() => setTool('furniture')}
-                  type="button"
-                >
-                  Place Furniture
-                </button>
-              </div>
-
-              <div className="furniture-list">
-                {Object.entries(FURNITURE_CATALOG).map(([key, data]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className={`furniture-card ${activeFurniture === key ? 'active' : ''}`}
-                    onClick={() => {
-                      setActiveFurniture(key as FurnitureType);
-                      setTool('furniture');
-                    }}
-                  >
-                    <div className="furniture-swatch" style={{ background: data.swatch }} />
-                    <strong>{data.label}</strong>
-                    <div className="note">{data.w}x{data.h} tiles</div>
-                  </button>
-                ))}
-              </div>
-
-              <div className="tool-row">
-                <button
-                  className="tool-button"
-                  onClick={() => setRotation((prev) => (prev === 0 ? 90 : 0))}
-                  type="button"
-                >
-                  Rotate {rotation === 0 ? '0°' : '90°'}
-                </button>
-              </div>
-
-              <div
-                className="grid"
-                style={{ gridTemplateColumns: `repeat(${gridWidth}, 24px)` }}
-              >
-                {grid.map((row, y) =>
-                  row.map((cell, x) => {
-                    const key = `${x},${y}`;
-                    const itemType = occupancy.get(key);
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        className={`grid-cell ${cell ? 'floor' : 'blocked'}`}
-                        onClick={() => handleCellClick(x, y)}
-                        title={cell ? 'Floor' : 'Empty'}
-                        style={
-                          itemType
-                            ? { background: FURNITURE_CATALOG[itemType].swatch, color: '#0b0f14' }
-                            : undefined
-                        }
-                      >
-                        {itemType ? itemType[0].toUpperCase() : ''}
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-
-              <div className="legend">
-                <span><i style={{ background: 'rgba(108, 212, 197, 0.6)' }} /> Floor</span>
-                <span><i style={{ background: 'rgba(224, 122, 95, 0.5)' }} /> Empty</span>
-                <span><i style={{ background: 'var(--accent)' }} /> Furniture</span>
-              </div>
-            </div>
-
-            <div className="hud-panel">
-              <h2>Actions</h2>
-              <div className="actions">
-                <button className="action-button primary" onClick={resetScene} type="button">Reset Scene</button>
-                <button className="action-button" onClick={clearFurniture} type="button">Clear Furniture</button>
-                <button className="action-button primary" onClick={handleDownload} type="button">Download PNG</button>
-              </div>
-              <div className="status">{status} Rooms: {roomCount}</div>
-              <p className="note">Tip: click any tile while in Place Furniture mode to drop items. Drag items around in the isometric view.</p>
-            </div>
-          </div>
-
-          <div className="hud-bottom">
-            <div className="hud-bar">
-              <span className="hud-title">Iso Room Planner</span>
-              <span>Rooms: {roomCount}</span>
-            </div>
-          </div>
+          <div className="status">{status}</div>
         </div>
       </section>
     </>
@@ -546,22 +507,18 @@ export default function RoomPlanner() {
 
 type IsoRoomCanvasProps = {
   grid: boolean[][];
-  rooms: Room[];
   items: FurnitureItem[];
+  spriteImages: Record<string, HTMLImageElement>;
   onMoveItem: (id: string, x: number, y: number) => void;
   selectedItemId: string | null;
   onSelectItem: (id: string | null) => void;
-  canvasRef?: React.RefObject<HTMLCanvasElement | null>;
 };
 
-function IsoRoomCanvas({ grid, items, rooms, onMoveItem, selectedItemId, onSelectItem, canvasRef }: IsoRoomCanvasProps) {
-  const internalCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const resolvedCanvasRef = canvasRef ?? internalCanvasRef;
+function IsoRoomCanvas({ grid, items, spriteImages, onMoveItem, selectedItemId, onSelectItem }: IsoRoomCanvasProps) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const offsetRef = useRef({ x: 0, y: 0 });
   const dragRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null);
-  const panRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [canvasSize, setCanvasSize] = useState({ width: 600, height: 520 });
 
   const gridWidth = grid[0]?.length ?? 0;
@@ -580,7 +537,7 @@ function IsoRoomCanvas({ grid, items, rooms, onMoveItem, selectedItemId, onSelec
   }, []);
 
   const drawScene = useCallback(() => {
-    const canvas = resolvedCanvasRef.current;
+    const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -607,8 +564,8 @@ function IsoRoomCanvas({ grid, items, rooms, onMoveItem, selectedItemId, onSelec
     const roomWidth = maxX - minX;
     const roomHeight = maxY - minY;
 
-    const offsetX = (canvasSize.width - roomWidth) / 2 - minX + panOffset.x;
-    const offsetY = (canvasSize.height - roomHeight) / 2 - minY + 24 + panOffset.y;
+    const offsetX = (canvasSize.width - roomWidth) / 2 - minX;
+    const offsetY = (canvasSize.height - roomHeight) / 2 - minY + 24;
     offsetRef.current = { x: offsetX, y: offsetY };
 
     const drawDiamond = (x: number, y: number, fill: string, stroke?: string) => {
@@ -625,40 +582,6 @@ function IsoRoomCanvas({ grid, items, rooms, onMoveItem, selectedItemId, onSelec
         ctx.lineWidth = 1;
         ctx.stroke();
       }
-    };
-
-    const drawLabelPill = (x: number, y: number, text: string, color: string) => {
-      ctx.save();
-      ctx.font = '600 12px "Space Grotesk", system-ui';
-      const paddingX = 10;
-      const paddingY = 6;
-      const metrics = ctx.measureText(text);
-      const width = metrics.width + paddingX * 2;
-      const height = 20 + paddingY;
-      const radius = 10;
-
-      const left = x - width / 2;
-      const top = y - height / 2;
-
-      ctx.beginPath();
-      ctx.moveTo(left + radius, top);
-      ctx.lineTo(left + width - radius, top);
-      ctx.quadraticCurveTo(left + width, top, left + width, top + radius);
-      ctx.lineTo(left + width, top + height - radius);
-      ctx.quadraticCurveTo(left + width, top + height, left + width - radius, top + height);
-      ctx.lineTo(left + radius, top + height);
-      ctx.quadraticCurveTo(left, top + height, left, top + height - radius);
-      ctx.lineTo(left, top + radius);
-      ctx.quadraticCurveTo(left, top, left + radius, top);
-      ctx.closePath();
-      ctx.fillStyle = color;
-      ctx.fill();
-
-      ctx.fillStyle = '#0b0f14';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(text, x, y + 1);
-      ctx.restore();
     };
 
     const drawNorthWall = (x: number, y: number) => {
@@ -691,40 +614,7 @@ function IsoRoomCanvas({ grid, items, rooms, onMoveItem, selectedItemId, onSelec
       ctx.stroke();
     };
 
-    for (let y = 0; y < gridHeight; y += 1) {
-      for (let x = 0; x < gridWidth; x += 1) {
-        if (!isFloorTile(grid, x, y)) continue;
-        const room = findRoomAt(rooms, x, y);
-        const { screenX, screenY } = gridToScreen(x, y, offsetX, offsetY);
-        const fill = room ? ROOM_COLORS[room.type].fill : 'rgba(55, 77, 95, 0.75)';
-        drawDiamond(screenX, screenY, fill, 'rgba(36, 55, 70, 0.8)');
-      }
-    }
-
-    for (let y = 0; y < gridHeight; y += 1) {
-      for (let x = 0; x < gridWidth; x += 1) {
-        if (!isFloorTile(grid, x, y)) continue;
-        const { screenX, screenY } = gridToScreen(x, y, offsetX, offsetY);
-        if (!isFloorTile(grid, x, y - 1)) {
-          drawNorthWall(screenX, screenY);
-        }
-        if (!isFloorTile(grid, x - 1, y)) {
-          drawWestWall(screenX, screenY);
-        }
-      }
-    }
-
-    for (const room of rooms) {
-      const centerX = room.x + room.w / 2;
-      const centerY = room.y + room.h / 2;
-      const { screenX, screenY } = gridToScreen(centerX, centerY, offsetX, offsetY);
-      const labelX = screenX + TILE_WIDTH / 2;
-      const labelY = screenY + TILE_HEIGHT / 2 - 18;
-      drawLabelPill(labelX, labelY, room.label, ROOM_COLORS[room.type].label);
-    }
-
-    const sortedItems = [...items].sort((a, b) => (a.x + a.y) - (b.x + b.y));
-    for (const item of sortedItems) {
+    const drawCuboid = (item: FurnitureItem) => {
       const palette = FURNITURE_CATALOG[item.type];
       const height = palette.height;
 
@@ -764,27 +654,102 @@ function IsoRoomCanvas({ grid, items, rooms, onMoveItem, selectedItemId, onSelec
       ctx.closePath();
       ctx.fillStyle = palette.side;
       ctx.fill();
+    };
 
-      if (item.id === selectedItemId) {
-        ctx.beginPath();
-        ctx.moveTo(topPoint.x, topPoint.y);
-        ctx.lineTo(rightPoint.x, rightPoint.y);
-        ctx.lineTo(bottomPoint.x, bottomPoint.y);
-        ctx.lineTo(leftPoint.x, leftPoint.y);
-        ctx.closePath();
-        ctx.strokeStyle = 'rgba(242, 161, 84, 0.95)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+    const drawSprite = (item: FurnitureItem, img: HTMLImageElement) => {
+      const info = SPRITE_MAP[item.type];
+      if (!info) return;
+
+      // Scale from kenney pixel space to our tile grid
+      const scale = TILE_WIDTH / KENNEY_TILE_PX;
+      const dw = info.pw * scale;
+      const dh = info.ph * scale;
+
+      // The footprint diamond center in screen coords
+      const topCorner = gridToScreen(item.x, item.y, offsetX, offsetY);
+      const bottomCorner = gridToScreen(item.x + item.w, item.y + item.h, offsetX, offsetY);
+
+      // Center of the footprint diamond
+      const centerX = (topCorner.screenX + bottomCorner.screenX) / 2 + TILE_WIDTH / 2;
+      // Bottom of the footprint diamond (where the sprite's ground level should be)
+      const footprintBottomY = bottomCorner.screenY + TILE_HEIGHT;
+
+      // Position sprite: centered horizontally, bottom-aligned to footprint bottom
+      const dx = centerX - dw / 2;
+      const dy = footprintBottomY - dh;
+
+      ctx.drawImage(img, dx, dy, dw, dh);
+    };
+
+    const drawSelectionHighlight = (item: FurnitureItem) => {
+      const top = gridToScreen(item.x, item.y, offsetX, offsetY);
+      const right = gridToScreen(item.x + item.w, item.y, offsetX, offsetY);
+      const bottom = gridToScreen(item.x + item.w, item.y + item.h, offsetX, offsetY);
+      const left = gridToScreen(item.x, item.y + item.h, offsetX, offsetY);
+
+      const topPoint = { x: top.screenX + TILE_WIDTH / 2, y: top.screenY };
+      const rightPoint = { x: right.screenX + TILE_WIDTH / 2, y: right.screenY };
+      const bottomPoint = { x: bottom.screenX + TILE_WIDTH / 2, y: bottom.screenY };
+      const leftPoint = { x: left.screenX + TILE_WIDTH / 2, y: left.screenY };
+
+      ctx.beginPath();
+      ctx.moveTo(topPoint.x, topPoint.y);
+      ctx.lineTo(rightPoint.x, rightPoint.y);
+      ctx.lineTo(bottomPoint.x, bottomPoint.y);
+      ctx.lineTo(leftPoint.x, leftPoint.y);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(242, 161, 84, 0.2)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(242, 161, 84, 0.95)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    };
+
+    // Draw floor tiles
+    for (let y = 0; y < gridHeight; y += 1) {
+      for (let x = 0; x < gridWidth; x += 1) {
+        if (!isFloorTile(grid, x, y)) continue;
+        const { screenX, screenY } = gridToScreen(x, y, offsetX, offsetY);
+        drawDiamond(screenX, screenY, 'rgba(55, 77, 95, 0.75)', 'rgba(36, 55, 70, 0.8)');
       }
     }
-  }, [canvasSize, grid, gridHeight, gridWidth, items, rooms, selectedItemId, resolvedCanvasRef, panOffset]);
+
+    // Draw walls
+    for (let y = 0; y < gridHeight; y += 1) {
+      for (let x = 0; x < gridWidth; x += 1) {
+        if (!isFloorTile(grid, x, y)) continue;
+        const { screenX, screenY } = gridToScreen(x, y, offsetX, offsetY);
+        if (!isFloorTile(grid, x, y - 1)) {
+          drawNorthWall(screenX, screenY);
+        }
+        if (!isFloorTile(grid, x - 1, y)) {
+          drawWestWall(screenX, screenY);
+        }
+      }
+    }
+
+    // Draw furniture items sorted by depth
+    const sortedItems = [...items].sort((a, b) => (a.x + a.y) - (b.x + b.y));
+    for (const item of sortedItems) {
+      const img = spriteImages[item.type];
+      if (img && SPRITE_MAP[item.type]) {
+        drawSprite(item, img);
+      } else {
+        drawCuboid(item);
+      }
+
+      if (item.id === selectedItemId) {
+        drawSelectionHighlight(item);
+      }
+    }
+  }, [canvasSize, grid, gridHeight, gridWidth, items, selectedItemId, spriteImages]);
 
   useEffect(() => {
     drawScene();
   }, [drawScene]);
 
   const handlePointerDown = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
-    const canvas = resolvedCanvasRef.current;
+    const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
@@ -795,22 +760,14 @@ function IsoRoomCanvas({ grid, items, rooms, onMoveItem, selectedItemId, onSelec
     if (item) {
       dragRef.current = { id: item.id, offsetX: gridX - item.x, offsetY: gridY - item.y };
       onSelectItem(item.id);
-      panRef.current = null;
     } else {
       onSelectItem(null);
-      panRef.current = { startX: event.clientX, startY: event.clientY, baseX: panOffset.x, baseY: panOffset.y };
     }
-  }, [items, onSelectItem, panOffset, resolvedCanvasRef]);
+  }, [items, onSelectItem]);
 
   const handlePointerMove = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (panRef.current) {
-      const dx = event.clientX - panRef.current.startX;
-      const dy = event.clientY - panRef.current.startY;
-      setPanOffset({ x: panRef.current.baseX + dx, y: panRef.current.baseY + dy });
-      return;
-    }
     if (!dragRef.current) return;
-    const canvas = resolvedCanvasRef.current;
+    const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
@@ -825,17 +782,16 @@ function IsoRoomCanvas({ grid, items, rooms, onMoveItem, selectedItemId, onSelec
     if (canPlaceItem(grid, items, candidate, active.id)) {
       onMoveItem(active.id, nextX, nextY);
     }
-  }, [grid, gridHeight, gridWidth, items, onMoveItem, resolvedCanvasRef]);
+  }, [grid, gridHeight, gridWidth, items, onMoveItem]);
 
   const handlePointerUp = useCallback(() => {
     dragRef.current = null;
-    panRef.current = null;
   }, []);
 
   return (
     <div className="canvas-wrap" ref={containerRef}>
       <canvas
-        ref={resolvedCanvasRef}
+        ref={canvasRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
