@@ -33,7 +33,7 @@ type FurniturePaletteItem = {
 const FURNITURE_CATALOG: Record<FurnitureType, FurniturePaletteItem> = {
   sofa: {
     label: 'Sofa',
-    w: 2,
+    w: 1,
     h: 1,
     height: 18,
     top: '#e4b49f',
@@ -43,8 +43,8 @@ const FURNITURE_CATALOG: Record<FurnitureType, FurniturePaletteItem> = {
   },
   bed: {
     label: 'Bed',
-    w: 2,
-    h: 2,
+    w: 1,
+    h: 1,
     height: 22,
     top: '#eadfcd',
     side: '#cbbda6',
@@ -53,7 +53,7 @@ const FURNITURE_CATALOG: Record<FurnitureType, FurniturePaletteItem> = {
   },
   table: {
     label: 'Table',
-    w: 2,
+    w: 1,
     h: 1,
     height: 14,
     top: '#d6c08f',
