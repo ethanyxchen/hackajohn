@@ -801,7 +801,7 @@ function IsoRoomCanvas({ grid, items, spriteImages, onMoveItem, selectedItemId, 
       // Center of the footprint diamond
       const centerX = (topCorner.screenX + bottomCorner.screenX) / 2 + TILE_WIDTH / 2;
       // Bottom of the footprint diamond (where the sprite's ground level should be)
-      const footprintBottomY = bottomCorner.screenY + TILE_HEIGHT;
+      const footprintBottomY = bottomCorner.screenY;
 
       // Position sprite: centered horizontally, bottom-aligned to footprint bottom
       const dx = centerX - dw / 2;
