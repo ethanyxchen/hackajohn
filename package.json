@@ -6,8 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix",
+    "lint": "oxlint --ignore-pattern packages/isometric-city",
+    "lint:fix": "oxlint --fix --ignore-pattern packages/isometric-city",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "prepare": "husky"
