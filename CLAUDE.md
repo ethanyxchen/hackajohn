@@ -9,10 +9,10 @@ Iso Room Planner — a hackathon prototype that renders a 2D floor-plan grid alo
 ## Commands
 
 ```bash
-npm install        # install deps (also pulls local package)
-npm run dev        # start Next.js dev server (port 3000, Turbopack)
-npm run build      # production build (type-checks via tsc)
-npm run lint       # ESLint via eslint-config-next
+yarn install       # install deps (also pulls local package)
+yarn dev           # start Next.js dev server (port 3000, Turbopack)
+yarn build         # production build (type-checks via tsc)
+yarn lint          # ESLint via eslint-config-next
 ```
 
 No test framework is configured.
