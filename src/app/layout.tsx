@@ -1,27 +1,25 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Fraunces } from "next/font/google";
+import { Press_Start_2P } from "next/font/google";
 import "./globals.css";
 
-const spaceGrotesk = Space_Grotesk({
+const pressStart2P = Press_Start_2P({
+    weight: "400",
     subsets: ["latin"],
-    variable: "--font-ui",
-    display: "swap",
-});
-
-const fraunces = Fraunces({
-    subsets: ["latin"],
-    variable: "--font-display",
+    variable: "--font-pixel",
     display: "swap",
 });
 
 export const metadata: Metadata = {
-    title: "Iso Room Planner",
+    title: "SnugBox",
     description: "Turn floor plans into playful isometric rooms and move furniture around.",
+    icons: {
+        icon: "/favicon.png",
+    },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
-        <html lang="en" className={`${spaceGrotesk.variable} ${fraunces.variable}`}>
+        <html lang="en" className={pressStart2P.variable}>
             <body>{children}</body>
         </html>
     );

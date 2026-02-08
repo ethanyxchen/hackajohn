@@ -141,7 +141,7 @@ export function IsoRoomCanvas({
 
         const drawLabelPill = (lx: number, ly: number, text: string, color: string) => {
             ctx.save();
-            ctx.font = '600 12px "Space Grotesk", system-ui';
+            ctx.font = '8px "Press Start 2P", monospace';
             const px = 10;
             const py = 6;
             const metrics = ctx.measureText(text);

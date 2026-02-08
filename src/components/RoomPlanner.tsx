@@ -344,14 +344,6 @@ export default function RoomPlanner() {
 
     return (
         <>
-            <header className="header">
-                <h1>Iso Room Planner</h1>
-                <p>
-                    Sketch a floor plan, then watch it snap into a cozy isometric room. Drop
-                    furniture on the plan or drag it around in the 3D view.
-                </p>
-            </header>
-
             <section className="main">
                 <div className="panel">
                     <h2>Floor Plan</h2>
@@ -500,7 +492,7 @@ export default function RoomPlanner() {
                     </p>
                 </div>
 
-                <div className="panel">
+                <div className="panel panel-iso">
                     <h2>Isometric Room</h2>
                     <div className="tool-row">
                         <button className="tool-button" onClick={handleRotateView} type="button">
