@@ -179,3 +179,10 @@ flowchart LR
 - **Can't find good sprites:** Keep colored-box approach but add gradients + shadows (15 min fix)
 - **Integration hiccups:** JSON contract minimizes these -- each person can test independently with hardcoded data
 - **Time runs short:** Items Person A + Person C auto-furnish alone = complete demo story
+
+---
+
+## Acknowledgments
+
+- Furniture assets by [Kenney](https://kenney.nl/assets/furniture-kit) (CC0 1.0)
+- Isometric engine based on [isometric-city](https://github.com/amilich/isometric-city) by amilich (MIT License)
