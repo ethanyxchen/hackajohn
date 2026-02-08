@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import type { FloorPlanData, Room } from "@/types/floorplan";
 import type { FurnitureItem, FurnitureType, Rotation, ViewRotation } from "@/types/furniture";
 import {
@@ -224,6 +225,84 @@ export default function RoomPlanner() {
         setStatus("Cleared all furniture.");
     }, []);
 
+    const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        setDragOver(true);
+    }, []);
+
+    const handleDragLeave = useCallback(() => {
+        setDragOver(false);
+    }, []);
+
+    const handleDrop = useCallback(
+        (e: React.DragEvent<HTMLDivElement>) => {
+            e.preventDefault();
+            setDragOver(false);
+            handleFiles(e.dataTransfer.files);
+        },
+        [handleFiles],
+    );
+
+    const handleUploadZoneClick = useCallback(() => {
+        fileInputRef.current?.click();
+    }, []);
+
+    const handleUploadZoneKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            fileInputRef.current?.click();
+        }
+    }, []);
+
+    const handleFileInputChange = useCallback(
+        (e: React.ChangeEvent<HTMLInputElement>) => {
+            handleFiles(e.target.files);
+        },
+        [handleFiles],
+    );
+
+    const handleAnalyzeClick = useCallback(
+        (e: React.MouseEvent) => {
+            e.stopPropagation();
+            handleAnalyze();
+        },
+        [handleAnalyze],
+    );
+
+    const handleClearUpload = useCallback((e: React.MouseEvent) => {
+        e.stopPropagation();
+        setUploadPreview(null);
+        setUploadError(null);
+    }, []);
+
+    const handleRotate = useCallback(() => {
+        setRotation((prev) => ((prev + 90) % 360) as Rotation);
+    }, []);
+
+    const handleRotateView = useCallback(() => {
+        setViewRotation((prev) => ((prev + 90) % 360) as ViewRotation);
+    }, []);
+
+    const handleMoveItem = useCallback((id: string, nextX: number, nextY: number) => {
+        setItems((prev) =>
+            prev.map((item) => (item.id === id ? { ...item, x: nextX, y: nextY } : item)),
+        );
+    }, []);
+
+    const handlePresetClick = useCallback(
+        (e: React.MouseEvent<HTMLButtonElement>) => {
+            const name = e.currentTarget.dataset.preset;
+            const preset = SAMPLE_PRESETS.find((p) => p.name === name);
+            if (preset) handleLoadPreset(preset);
+        },
+        [handleLoadPreset],
+    );
+
+    const handleFurnitureCardClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+        const type = e.currentTarget.dataset.type as FurnitureType;
+        if (type) setActiveFurniture(type);
+    }, []);
+
     const maxGranularity = useMemo(() => {
         if (!baseGrid || baseGrid.length === 0 || baseGrid[0]?.length === 0) return 1;
         const baseCols = baseGrid[0].length;
@@ -278,37 +357,35 @@ export default function RoomPlanner() {
                     <h2>Floor Plan</h2>
 
                     <div
+                        tabIndex={0}
                         className={`upload-zone ${dragOver ? "dragover" : ""}`}
-                        onDragOver={(e) => {
-                            e.preventDefault();
-                            setDragOver(true);
-                        }}
-                        onDragLeave={() => setDragOver(false)}
-                        onDrop={(e) => {
-                            e.preventDefault();
-                            setDragOver(false);
-                            handleFiles(e.dataTransfer.files);
-                        }}
-                        onClick={() => fileInputRef.current?.click()}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                        onClick={handleUploadZoneClick}
+                        onKeyDown={handleUploadZoneKeyDown}
                     >
                         <input
                             ref={fileInputRef}
                             type="file"
                             accept="image/*"
                             className="upload-input"
-                            onChange={(e) => handleFiles(e.target.files)}
+                            onChange={handleFileInputChange}
                         />
                         {uploadPreview ? (
                             <div className="upload-preview">
-                                <img src={uploadPreview} alt="Floor plan preview" />
+                                <Image
+                                    src={uploadPreview}
+                                    alt="Floor plan preview"
+                                    width={400}
+                                    height={300}
+                                    unoptimized
+                                />
                                 <div className="upload-actions">
                                     <button
                                         type="button"
                                         className="action-button primary"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleAnalyze();
-                                        }}
+                                        onClick={handleAnalyzeClick}
                                         disabled={uploading}
                                     >
                                         {uploading ? (
@@ -322,11 +399,7 @@ export default function RoomPlanner() {
                                     <button
                                         type="button"
                                         className="tool-button"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setUploadPreview(null);
-                                            setUploadError(null);
-                                        }}
+                                        onClick={handleClearUpload}
                                     >
                                         Clear
                                     </button>
@@ -352,7 +425,8 @@ export default function RoomPlanner() {
                                 key={preset.name}
                                 type="button"
                                 className="tool-button"
-                                onClick={() => handleLoadPreset(preset)}
+                                data-preset={preset.name}
+                                onClick={handlePresetClick}
                             >
                                 {preset.name}
                             </button>
@@ -365,9 +439,8 @@ export default function RoomPlanner() {
                                 key={key}
                                 type="button"
                                 className={`furniture-card ${activeFurniture === key ? "active" : ""}`}
-                                onClick={() => {
-                                    setActiveFurniture(key as FurnitureType);
-                                }}
+                                data-type={key}
+                                onClick={handleFurnitureCardClick}
                             >
                                 <SpritePreview
                                     type={key as FurnitureType}
@@ -383,11 +456,7 @@ export default function RoomPlanner() {
                     </div>
 
                     <div className="tool-row">
-                        <button
-                            className="tool-button"
-                            onClick={() => setRotation((prev) => ((prev + 90) % 360) as Rotation)}
-                            type="button"
-                        >
+                        <button className="tool-button" onClick={handleRotate} type="button">
                             Rotate {rotation}° ({ROTATION_TO_ORIENTATION[rotation]})
                         </button>
                     </div>
@@ -434,13 +503,7 @@ export default function RoomPlanner() {
                 <div className="panel">
                     <h2>Isometric Room</h2>
                     <div className="tool-row">
-                        <button
-                            className="tool-button"
-                            onClick={() =>
-                                setViewRotation((prev) => ((prev + 90) % 360) as ViewRotation)
-                            }
-                            type="button"
-                        >
+                        <button className="tool-button" onClick={handleRotateView} type="button">
                             Rotate View {viewRotation}°
                         </button>
                     </div>
@@ -451,13 +514,7 @@ export default function RoomPlanner() {
                         items={items}
                         spriteImages={spriteImages}
                         viewRotation={viewRotation}
-                        onMoveItem={(id, nextX, nextY) => {
-                            setItems((prev) =>
-                                prev.map((item) =>
-                                    item.id === id ? { ...item, x: nextX, y: nextY } : item,
-                                ),
-                            );
-                        }}
+                        onMoveItem={handleMoveItem}
                         onPlaceItem={handlePlaceAt}
                         selectedItemId={selectedItemId}
                         onSelectItem={setSelectedItemId}

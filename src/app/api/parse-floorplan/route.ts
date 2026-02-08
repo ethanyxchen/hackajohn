@@ -77,7 +77,6 @@ function validateRoom(room: unknown, grid: boolean[][], cols: number, rows: numb
         return false;
     if (w < 1 || h < 1 || x < 0 || y < 0 || x + w > cols || y + h > rows) return false;
 
-    // Relaxed validation: at least 40% of cells should be floor (allows walls/doors within room bounds)
     let total = 0;
     let floorCount = 0;
     for (let dy = 0; dy < h; dy++) {
@@ -121,13 +120,11 @@ function validateAndNormalize(data: unknown, cols: number, rows: number): FloorP
         Array.isArray(rawGrid[0]) &&
         (rawGrid[0] as unknown[]).length === cols
     ) {
-        // Perfect match
         normalizedGrid = rawGrid.map((row) => {
             if (!Array.isArray(row)) return Array(cols).fill(false) as boolean[];
             return row.map((cell) => Boolean(cell));
         });
     } else {
-        // Model returned wrong dimensions — resample to target
         const tempGrid: boolean[][] = rawGrid.map((row) => {
             if (!Array.isArray(row)) return Array(cols).fill(false);
             return (row as unknown[]).map((cell) => Boolean(cell));
@@ -145,7 +142,6 @@ function validateAndNormalize(data: unknown, cols: number, rows: number): FloorP
     return { grid: normalizedGrid, rooms };
 }
 
-/** Check if the grid is too sparse (probably a failed parse) */
 function gridFloorRatio(grid: boolean[][]): number {
     let total = 0;
     let floor = 0;
@@ -197,6 +193,31 @@ async function callGemini(
     return validateAndNormalize(parsed, cols, rows);
 }
 
+async function callGeminiWithRetry(
+    apiKey: string,
+    mimeType: string,
+    base64Data: string,
+    cols: number,
+    rows: number,
+): Promise<FloorPlanData> {
+    let lastError: Error | undefined;
+
+    try {
+        const first = await callGemini(apiKey, mimeType, base64Data, cols, rows);
+        if (gridFloorRatio(first.grid) >= 0.1) return first;
+    } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+    }
+
+    try {
+        const second = await callGemini(apiKey, mimeType, base64Data, cols, rows);
+        if (gridFloorRatio(second.grid) >= 0.1) return second;
+        throw new Error("Floor plan grid is almost empty after 2 attempts");
+    } catch (err) {
+        throw lastError ?? (err instanceof Error ? err : new Error(String(err)));
+    }
+}
+
 export async function POST(request: Request) {
     try {
         const apiKey = process.env.GEMINI_API_KEY;
@@ -220,34 +241,7 @@ export async function POST(request: Request) {
         const mimeType = match ? match[1] : "image/png";
         const base64Data = match ? match[2] : dataUri.replace(/^data:[^;]+;base64,/, "");
 
-        // Try up to 2 times — if first attempt produces a mostly-empty grid, retry once
-        let floorPlan: FloorPlanData | null = null;
-        let lastError: string | null = null;
-
-        for (let attempt = 0; attempt < 2; attempt++) {
-            try {
-                const result = await callGemini(apiKey, mimeType, base64Data, cols, rows);
-                const ratio = gridFloorRatio(result.grid);
-
-                if (ratio < 0.1) {
-                    // Grid is almost entirely empty — likely a failed parse
-                    lastError = `Attempt ${attempt + 1}: grid was almost empty (${(ratio * 100).toFixed(0)}% floor). Retrying…`;
-                    continue;
-                }
-
-                floorPlan = result;
-                break;
-            } catch (err) {
-                lastError = err instanceof Error ? err.message : "Unknown error";
-            }
-        }
-
-        if (!floorPlan) {
-            return NextResponse.json(
-                { error: lastError || "Failed to parse floor plan after retries" },
-                { status: 502 },
-            );
-        }
+        const floorPlan = await callGeminiWithRetry(apiKey, mimeType, base64Data, cols, rows);
 
         return NextResponse.json(floorPlan);
     } catch (err) {

@@ -566,6 +566,10 @@ export function IsoRoomCanvas({
         [baseCols, baseRows, gridHeight, gridWidth, pan.x, pan.y, viewRotation, zoom],
     );
 
+    const handleContextMenu = useCallback((event: React.MouseEvent) => {
+        event.preventDefault();
+    }, []);
+
     // Attach wheel listener as non-passive so preventDefault() actually works
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -621,7 +625,7 @@ export function IsoRoomCanvas({
         <div className="canvas-wrap" ref={containerRef}>
             <canvas
                 ref={canvasRef}
-                onContextMenu={(event) => event.preventDefault()}
+                onContextMenu={handleContextMenu}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}

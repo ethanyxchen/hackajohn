@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { FurnitureType, Rotation } from "@/types/furniture";
 import { FURNITURE_CATALOG, ROTATION_TO_ORIENTATION } from "@/data/furniture-catalog";
 
@@ -39,13 +39,10 @@ export function SpritePreview({
         ctx.drawImage(img, dx, dy, dw, dh);
     }, [img, rotation]);
 
+    const swatchStyle = useMemo(() => ({ background: FURNITURE_CATALOG[type].swatch }), [type]);
+
     if (!img) {
-        return (
-            <div
-                className="furniture-swatch"
-                style={{ background: FURNITURE_CATALOG[type].swatch }}
-            />
-        );
+        return <div className="furniture-swatch" style={swatchStyle} />;
     }
 
     return <canvas ref={canvasRef} className="furniture-preview" />;
