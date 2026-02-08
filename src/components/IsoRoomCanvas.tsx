@@ -82,6 +82,35 @@ export function IsoRoomCanvas({
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
+        const styles = getComputedStyle(canvas);
+        const canvasColors = {
+            floorFallback:
+                styles.getPropertyValue("--color-canvas-floor-fallback").trim() ||
+                "rgba(55, 77, 95, 0.75)",
+            floorStroke:
+                styles.getPropertyValue("--color-canvas-floor-stroke").trim() ||
+                "rgba(36, 55, 70, 0.8)",
+            wallNorth:
+                styles.getPropertyValue("--color-canvas-wall-north").trim() ||
+                "rgba(222, 205, 178, 0.9)",
+            wallNorthStroke:
+                styles.getPropertyValue("--color-canvas-wall-north-stroke").trim() ||
+                "rgba(108, 95, 80, 0.5)",
+            wallWest:
+                styles.getPropertyValue("--color-canvas-wall-west").trim() ||
+                "rgba(198, 180, 152, 0.9)",
+            wallWestStroke:
+                styles.getPropertyValue("--color-canvas-wall-west-stroke").trim() ||
+                "rgba(96, 84, 70, 0.5)",
+            labelText: styles.getPropertyValue("--color-canvas-label-text").trim() || "#0b0f14",
+            selectFill:
+                styles.getPropertyValue("--color-canvas-select-fill").trim() ||
+                "rgba(242, 161, 84, 0.2)",
+            selectStroke:
+                styles.getPropertyValue("--color-canvas-select-stroke").trim() ||
+                "rgba(242, 161, 84, 0.95)",
+        };
+
         const dpr = window.devicePixelRatio || 1;
         canvas.width = canvasSize.width * dpr;
         canvas.height = canvasSize.height * dpr;
@@ -163,7 +192,7 @@ export function IsoRoomCanvas({
             ctx.closePath();
             ctx.fillStyle = color;
             ctx.fill();
-            ctx.fillStyle = "#0b0f14";
+            ctx.fillStyle = canvasColors.labelText;
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(text, lx, ly + 1);
@@ -179,9 +208,9 @@ export function IsoRoomCanvas({
             ctx.lineTo(baseRight.x, baseRight.y - wallHeight);
             ctx.lineTo(baseLeft.x, baseLeft.y - wallHeight);
             ctx.closePath();
-            ctx.fillStyle = "rgba(222, 205, 178, 0.9)";
+            ctx.fillStyle = canvasColors.wallNorth;
             ctx.fill();
-            ctx.strokeStyle = "rgba(108, 95, 80, 0.5)";
+            ctx.strokeStyle = canvasColors.wallNorthStroke;
             ctx.stroke();
         };
 
@@ -194,9 +223,9 @@ export function IsoRoomCanvas({
             ctx.lineTo(baseRight.x, baseRight.y - wallHeight);
             ctx.lineTo(baseLeft.x, baseLeft.y - wallHeight);
             ctx.closePath();
-            ctx.fillStyle = "rgba(198, 180, 152, 0.9)";
+            ctx.fillStyle = canvasColors.wallWest;
             ctx.fill();
-            ctx.strokeStyle = "rgba(96, 84, 70, 0.5)";
+            ctx.strokeStyle = canvasColors.wallWestStroke;
             ctx.stroke();
         };
 
@@ -272,12 +301,10 @@ export function IsoRoomCanvas({
             const dw = img.naturalWidth * scale;
             const dh = img.naturalHeight * scale;
 
-            // Center of the footprint diamond
             const centerX = (topCorner.screenX + bottomCorner.screenX) / 2 + TILE_WIDTH / 2;
-            // Bottom of the footprint diamond (where the sprite's ground level should be)
+            // Bottom of the footprint diamond -- sprite ground level aligns here
             const footprintBottomY = bottomCorner.screenY;
 
-            // Position sprite: centered horizontally, bottom-aligned to footprint bottom
             const dx = centerX - dw / 2;
             const dy = footprintBottomY - dh;
 
@@ -301,9 +328,9 @@ export function IsoRoomCanvas({
             ctx.lineTo(bottomPoint.x, bottomPoint.y);
             ctx.lineTo(leftPoint.x, leftPoint.y);
             ctx.closePath();
-            ctx.fillStyle = "rgba(242, 161, 84, 0.2)";
+            ctx.fillStyle = canvasColors.selectFill;
             ctx.fill();
-            ctx.strokeStyle = "rgba(242, 161, 84, 0.95)";
+            ctx.strokeStyle = canvasColors.selectStroke;
             ctx.lineWidth = 2;
             ctx.stroke();
         };
@@ -314,8 +341,8 @@ export function IsoRoomCanvas({
                 if (!isFloorTile(grid, original.x, original.y)) continue;
                 const room = findRoomAt(rooms, original.x, original.y);
                 const { screenX, screenY } = gridToScreen(x, y, offsetX, offsetY);
-                const fill = room ? ROOM_COLORS[room.type].fill : "rgba(55, 77, 95, 0.75)";
-                drawDiamond(screenX, screenY, fill, "rgba(36, 55, 70, 0.8)");
+                const fill = room ? ROOM_COLORS[room.type].fill : canvasColors.floorFallback;
+                drawDiamond(screenX, screenY, fill, canvasColors.floorStroke);
             }
         }
 
@@ -389,6 +416,22 @@ export function IsoRoomCanvas({
 
     useEffect(() => {
         drawScene();
+    }, [drawScene]);
+
+    useEffect(() => {
+        const observer = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                if (mutation.attributeName === "data-theme") {
+                    drawScene();
+                    return;
+                }
+            }
+        });
+        observer.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ["data-theme"],
+        });
+        return () => observer.disconnect();
     }, [drawScene]);
 
     const handlePointerDown = useCallback(
