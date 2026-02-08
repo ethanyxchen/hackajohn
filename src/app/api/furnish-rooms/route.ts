@@ -87,10 +87,10 @@ function validatePlacements(
         if (!validTypes.has(t)) continue;
         if (!Number.isInteger(x) || !Number.isInteger(y)) continue;
         if (x < 0 || y < 0 || x >= cols || y >= rows) continue;
-        if (!grid[y]?.[x]) continue; // not a floor tile
+        if (!grid[y]?.[x]) continue;
 
         const key = `${x},${y}`;
-        if (occupied.has(key)) continue; // overlap
+        if (occupied.has(key)) continue;
         occupied.add(key);
 
         result.push({ type: t as FurnitureType, x, y });
@@ -124,7 +124,6 @@ export async function POST(request: Request) {
             );
         }
 
-        // Normalize grid to boolean[][]
         const normalizedGrid: boolean[][] = grid.map((row: unknown) =>
             Array.isArray(row) ? row.map((cell: unknown) => Boolean(cell)) : [],
         );
