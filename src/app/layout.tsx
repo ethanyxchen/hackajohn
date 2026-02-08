@@ -12,6 +12,9 @@ const pressStart2P = Press_Start_2P({
 export const metadata: Metadata = {
     title: "SnugBox",
     description: "Turn floor plans into playful isometric rooms and move furniture around.",
+    icons: {
+        icon: "/favicon.png",
+    },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
